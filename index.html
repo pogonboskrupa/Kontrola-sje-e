@@ -431,7 +431,7 @@ body {
       <div class="logo-icon">🌲</div>
       <div class="logo-text">
         <h1>Kontrola Primke</h1>
-        <p>Šumsko gazdinstvo &nbsp;·&nbsp; offline</p>
+        <p>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; offline</p>
       </div>
     </div>
     <div class="header-btns">
@@ -453,8 +453,8 @@ body {
       <input type="text" id="meta-kontrolor" placeholder="Ime i prezime">
     </div>
     <div class="meta-field">
-      <label>Br. primke</label>
-      <input type="text" id="meta-primka" placeholder="SO-2024-001">
+      <label>Primač</label>
+      <input type="text" id="meta-primka" placeholder="Ime primača">
     </div>
     <div class="meta-field meta-full">
       <label>Napomena</label>
@@ -1199,7 +1199,7 @@ function novaLista() {
 function exportCSV() {
   const meta = getMeta();
   let csv = '\uFEFF';
-  csv += `Kontrola primke/sječe\nOdjel;${meta.odjel}\nDatum;${meta.datum}\nKontrolol;${meta.kontrolor}\nBr. primke;${meta.primka}\n\n`;
+  csv += `Kontrola primke/sječe\nOdjel;${meta.odjel}\nDatum;${meta.datum}\nKontrolol;${meta.kontrolor}\nPrimač;${meta.primka}\n\n`;
   csv += 'R.br.;Vrsta;Plocica;K.Prec(cm);K.Duz(m);K.Sort;Nap;R.Prec(cm);R.Duz(m);R.Sort;Delta.Prec;Delta.Duz;Delta.V(m3);Delta.Sort\n';
   rows.forEach((r,i) => {
     const vK=calcV(r.kPrec,r.kDuz), vR=calcV(r.rPrec,r.rDuz);
@@ -1254,7 +1254,7 @@ async function exportPDF() {
     doc.rect(0, 24, W, 22, 'F');
     const metaData = [
       ['Odjel:', meta.odjel||'—', 'Datum:', meta.datum||'—'],
-      ['Kontrolor:', meta.kontrolor||'—', 'Br. primke:', meta.primka||'—'],
+      ['Kontrolor:', meta.kontrolor||'—', 'Primač:', meta.primka||'—'],
     ];
     let my = 31;
     metaData.forEach(row => {
