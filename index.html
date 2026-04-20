@@ -77,7 +77,27 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  overflow: hidden;
+  max-height: 300px;
+  transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
 }
+.meta-bar.skriveno {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.meta-toggle-btn {
+  background: rgba(255,255,255,0.15); border: none; color: white;
+  border-radius: 8px; padding: 8px 10px; font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  gap: 4px; font-weight: 600;
+}
+.meta-toggle-btn:active { background: rgba(255,255,255,0.3); }
 .meta-field label {
   display: block; font-size: 10px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.07em;
@@ -411,6 +431,7 @@ body {
       </div>
     </div>
     <div class="header-btns">
+      <button class="meta-toggle-btn" id="meta-toggle-btn" onclick="toggleMetaBar()" title="Prikaži/sakrij podatke o kontroli">✎ Podaci</button>
       <button class="icon-btn" onclick="otvoriMeni()" title="Meni">⋮</button>
     </div>
   </div>
@@ -633,7 +654,7 @@ window.addEventListener('DOMContentLoaded', () => {
   if (saved) {
     try { ucitajData(JSON.parse(saved)); showToast('Učitano auto-snimanje'); } catch(e) {}
   }
-  renderLista(); updateStats();
+  renderLista(); updateStats(); updateMetaBarVisibility();
 
   // Auto-save na promjenu meta polja
   document.querySelectorAll('.meta-bar input').forEach(inp => {
@@ -644,6 +665,27 @@ window.addEventListener('DOMContentLoaded', () => {
 // ══════════════════════════════════════════
 //  ADD / DELETE ROW
 // ══════════════════════════════════════════
+// ══════════════════════════════════════════
+//  META BAR TOGGLE
+// ══════════════════════════════════════════
+function updateMetaBarVisibility() {
+  const bar = document.querySelector('.meta-bar');
+  const btn = document.getElementById('meta-toggle-btn');
+  if (!bar) return;
+  if (rows.length > 0) {
+    bar.classList.add('skriveno');
+    if (btn) btn.style.opacity = '1';
+  } else {
+    bar.classList.remove('skriveno');
+  }
+}
+
+function toggleMetaBar() {
+  const bar = document.querySelector('.meta-bar');
+  if (!bar) return;
+  bar.classList.toggle('skriveno');
+}
+
 function addRow(data) {
   const id = idCnt++;
   const r = {
@@ -661,7 +703,7 @@ function addRow(data) {
     expanded: true,
   };
   rows.push(r);
-  renderLista(); updateStats(); autoSave();
+  renderLista(); updateStats(); autoSave(); updateMetaBarVisibility();
   // Scroll do novog
   setTimeout(() => {
     const el = document.getElementById('card-' + id);
@@ -672,7 +714,7 @@ function addRow(data) {
 function deleteRow(id) {
   if (!confirm('Obrisati ovo stablo?')) return;
   rows = rows.filter(r => r.id !== id);
-  renderLista(); updateStats(); autoSave();
+  renderLista(); updateStats(); autoSave(); updateMetaBarVisibility();
   showToast('Stablo obrisano');
 }
 
@@ -1133,7 +1175,7 @@ function ucitajData(data) {
   if (data.meta) setMeta(data.meta);
   rows  = (data.rows||[]).map(r => ({...r, photos: r.photos||[], expanded: false}));
   idCnt = data.idCnt || (rows.length ? Math.max(...rows.map(r=>r.id))+1 : 0);
-  renderLista(); updateStats();
+  renderLista(); updateStats(); updateMetaBarVisibility();
 }
 
 function autoSave() {
@@ -1144,7 +1186,7 @@ function novaLista() {
   if (rows.length > 0 && !confirm('Obrisati sve i početi novu listu?')) return;
   rows = []; idCnt = 0;
   setMeta({odjel:'', datum:new Date().toISOString().split('T')[0], kontrolor:'', primka:'', napomena:''});
-  renderLista(); updateStats(); showToast('Nova lista');
+  renderLista(); updateStats(); updateMetaBarVisibility(); showToast('Nova lista');
 }
 
 // ══════════════════════════════════════════
