@@ -1,4 +1,5 @@
 {
+  "id": "./",
   "name": "Kontrola sječe",
   "short_name": "Kont. sječe",
   "description": "Kontrola primke i sječe šume – radi offline",
@@ -8,7 +9,9 @@
   "theme_color": "#1a3a2a",
   "orientation": "portrait-primary",
   "lang": "bs",
+  "dir": "ltr",
   "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "icons/icon.svg",
@@ -20,13 +23,41 @@
       "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "icons/screenshot-narrow.png",
+      "sizes": "640x1136",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Pregled kontrolisanih sortimenata"
+    },
+    {
+      "src": "icons/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Tabelarni prikaz kontrole sječe"
     }
   ]
 }

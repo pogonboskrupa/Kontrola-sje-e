@@ -1,4 +1,4 @@
-const CACHE = 'kp-v2';
+const CACHE = 'kp-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -6,6 +6,8 @@ const ASSETS = [
   './icons/icon.svg',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './icons/screenshot-narrow.png',
+  './icons/screenshot-wide.png',
 ];
 
 self.addEventListener('install', e => {
