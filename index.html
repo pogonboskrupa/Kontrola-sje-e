@@ -414,11 +414,54 @@ body {
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ══ PRINT ══ */
+.print-header { display: none; }
 @media print {
   .fab, .header-btns, .toolbar, .card-actions, .card-chevron,
-  .field-group input, .field-group select, .toast, .modal-overlay { display: none !important; }
-  .stablo-card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
-  body { background: white; }
+  .field-group input, .field-group select, .toast, .modal-overlay,
+  .stats-bar, .meta-bar, .meta-toggle-btn { display: none !important; }
+
+  body { background: white; font-size: 11px; }
+  .header { position: static; box-shadow: none; }
+
+  .print-header {
+    display: block !important;
+    padding: 10px 14px 8px;
+    background: #1a3a2a;
+    color: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-header h2 { font-size: 14px; margin: 0 0 2px; }
+  .print-header p  { font-size: 10px; opacity: 0.75; margin: 0; }
+  .print-meta {
+    display: grid !important;
+    grid-template-columns: repeat(4,1fr);
+    gap: 6px 16px;
+    background: #2d6a4f;
+    padding: 8px 14px;
+    color: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-meta-field span { display: block; font-size: 9px; opacity: 0.65; text-transform: uppercase; }
+  .print-meta-field strong { font-size: 11px; }
+
+  .stablo-lista { padding: 8px 14px 16px; gap: 6px; }
+  .stablo-card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    border-left-width: 3px !important;
+    break-inside: avoid;
+  }
+  .stablo-card.has-diff { border-left-color: #c0392b !important; }
+  .stablo-card.ok       { border-left-color: #52b788 !important; }
+  .card-body { display: block !important; }
+  .data-section { margin-top: 8px; }
+  .input-row { gap: 4px; margin-bottom: 4px; }
+  .field-group { gap: 1px; }
+  .field-group label { font-size: 9px; }
+  .diff-row { gap: 4px; }
+  .diff-box { padding: 4px 6px; }
 }
 </style>
 </head>
@@ -461,6 +504,18 @@ body {
       <input type="text" id="meta-napomena" placeholder="Opća napomena...">
     </div>
   </div>
+</div>
+
+<!-- ══ PRINT HEADER (skriveno na ekranu, vidljivo pri štampi) ══ -->
+<div class="print-header">
+  <h2>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata</h2>
+  <p id="print-sub">Datum štampe: <span id="print-datum-now"></span></p>
+</div>
+<div class="print-meta" style="display:none">
+  <div class="print-meta-field"><span>Kontrolant</span><strong id="pm-kontrolor">—</strong></div>
+  <div class="print-meta-field"><span>Primač</span><strong id="pm-primac">—</strong></div>
+  <div class="print-meta-field"><span>Odjel / Lokacija</span><strong id="pm-odjel">—</strong></div>
+  <div class="print-meta-field"><span>Datum</span><strong id="pm-datum">—</strong></div>
 </div>
 
 <!-- ══ STATS BAR ══ -->
@@ -1015,10 +1070,11 @@ function updateStats() {
 // ══════════════════════════════════════════
 //  HELPER FUNKCIJE
 // ══════════════════════════════════════════
+// Prosta Huberova formula: V = (π/4) × d² × L  (d u metrima, L u metrima)
 function calcV(prec, duz) {
   const p = parseFloat(prec), d = parseFloat(duz);
   if (isNaN(p) || isNaN(d) || p <= 0 || d <= 0) return null;
-  return Math.PI * Math.pow(p / 200, 2) * d;
+  return (Math.PI / 4) * Math.pow(p / 100, 2) * d;
 }
 function calcDiff(a, b) {
   const na = parseFloat(a), nb = parseFloat(b);
@@ -1223,7 +1279,7 @@ async function exportPDF() {
   if (!window.jspdf) {
     try {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-    } catch(e) { alert('Nije moguće učitati PDF biblioteku. Provjeri internet konekciju.'); return; }
+    } catch(e) { alert('Nije moguce ucitati PDF biblioteku. Provjeri internet konekciju.'); return; }
   }
 
   document.getElementById('pdf-overlay').classList.add('open');
@@ -1231,13 +1287,307 @@ async function exportPDF() {
 
   try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    // A4 horizontalno – vise prostora za tabelu s 14 kolona
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const meta = getMeta();
-    const W = 210, H = 297, mg = 14;
-    const contentW = W - mg * 2;
+    const W = 297, H = 210, mg = 12;
+    const CW = W - mg * 2;
 
-    const gd = [26, 58, 42], gm = [45, 106, 79], gl = [82, 183, 136];
-    const gp = [216, 243, 220], g1 = [242, 242, 247], g5 = [99, 99, 102];
+    // Paleta boja (RGB)
+    const GD = [26,58,42], GM = [45,106,79], GL = [82,183,136];
+    const GP = [216,243,220], G1 = [242,242,247], G5 = [99,99,102];
+    const RED = [192,57,43], BLU = [21,101,192];
+
+    // Izracunaj statistike
+    let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0;
+    rows.forEach(r => {
+      const dp=calcDiff(r.kPrec,r.rPrec), dd=calcDiff(r.kDuz,r.rDuz);
+      if (dp!==null&&Math.abs(dp)>0.001) diffPrec++;
+      if (dd!==null&&Math.abs(dd)>0.001) diffDuz++;
+      if (r.kSort&&r.rSort&&r.kSort!==r.rSort) diffKlas++;
+      const vk=calcV(r.kPrec,r.kDuz), vr=calcV(r.rPrec,r.rDuz);
+      if (vk!==null) totalVK+=vk;
+      if (vr!==null) totalVR+=vr;
+    });
+    const dV0 = totalVK - totalVR;
+    const ukDiff = diffPrec + diffDuz + diffKlas;
+
+    // ── ZAGLAVLJE ────────────────────────────────────────────────────
+    doc.setFillColor(...GD); doc.rect(0,0,W,17,'F');
+    doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('SPD UNSKO SANSKE SUME', mg, 8);
+    doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(160,210,180);
+    doc.text('KONTROLA SJECE SUMSKIH SORTIMENATA', mg, 14);
+    doc.setFontSize(7); doc.setTextColor(200,230,210);
+    const genDatum = new Date().toLocaleDateString('hr-HR');
+    const genVrijeme = new Date().toLocaleTimeString('hr-HR');
+    doc.text('Generirano: ' + genDatum + '  ' + genVrijeme, W-mg, 10, {align:'right'});
+
+    // ── META PODACI ───────────────────────────────────────────────────
+    let y = 17;
+    doc.setFillColor(...GM); doc.rect(0,y,W,14,'F');
+    const metaPolja = [
+      ['KONTROLANT', meta.kontrolor||'nije uneseno'],
+      ['PRIMAC',     meta.primka   ||'nije uneseno'],
+      ['ODJEL',      meta.odjel    ||'nije uneseno'],
+      ['DATUM',      meta.datum    ||'nije uneseno'],
+    ];
+    const mfw = (CW-38) / metaPolja.length;
+    metaPolja.forEach(([lab, val], i) => {
+      const mx = mg + i * (mfw + 38/metaPolja.length);
+      doc.setFontSize(6); doc.setFont('helvetica','bold'); doc.setTextColor(160,210,180);
+      doc.text(lab, mx, y+5.5);
+      doc.setFontSize(8.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+      doc.text(String(val).substring(0,24), mx, y+11.5);
+    });
+    // Status badge
+    if (ukDiff===0) { doc.setFillColor(52,168,83); } else { doc.setFillColor(...RED); }
+    doc.roundedRect(W-mg-34, y+3, 34, 8, 2, 2, 'F');
+    doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    const statusTxt = ukDiff===0 ? 'BEZ RAZLIKA' : (ukDiff+' RAZLIKA');
+    doc.text(statusTxt, W-mg-17, y+8.2, {align:'center'});
+    y += 14;
+
+    // ── STATISTIKE ────────────────────────────────────────────────────
+    doc.setFillColor(...G1); doc.rect(0,y,W,12,'F');
+    const statPolja = [
+      {lab:'UKUPNO ZAPISA', val:String(rows.length),                              cr:false},
+      {lab:'RAZLIKE PRECNIK',val:String(diffPrec),                                cr:diffPrec>0},
+      {lab:'RAZLIKE DUZINA', val:String(diffDuz),                                 cr:diffDuz>0},
+      {lab:'RAZLIKE KLASA',  val:String(diffKlas),                                cr:diffKlas>0},
+      {lab:'ZAP. KONTR. m3', val:totalVK.toFixed(3),                              cr:false},
+      {lab:'ZAP. REDN. m3',  val:totalVR.toFixed(3),                              cr:false},
+      {lab:'DELTA ZAP. m3',  val:(dV0>=0?'+':'')+dV0.toFixed(3),                 cr:Math.abs(dV0)>0.001},
+    ];
+    const spw = CW / statPolja.length;
+    statPolja.forEach(({lab,val,cr}, i) => {
+      const sx = mg + i*spw + spw/2;
+      if (i>0) { doc.setDrawColor(210,215,210); doc.setLineWidth(0.2); doc.line(mg+i*spw, y+1.5, mg+i*spw, y+10.5); }
+      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(...G5);
+      doc.text(lab, sx, y+5, {align:'center'});
+      doc.setFontSize(10); doc.setFont('helvetica','bold');
+      if (cr) { doc.setTextColor(...RED); }
+      else if (i===0) { doc.setTextColor(...GD); }
+      else if (i>=4)  { doc.setTextColor(...GM); }
+      else { doc.setTextColor(40,40,40); }
+      doc.text(val, sx, y+11, {align:'center'});
+    });
+    y += 12;
+
+    // ── TABELA ────────────────────────────────────────────────────────
+    const COLS = [
+      {h:'#',          w:6,  al:'center', grp:''},
+      {h:'Vrsta',      w:20, al:'left',   grp:''},
+      {h:'Plocica',    w:13, al:'center', grp:''},
+      {h:'K.Precnik\ncm', w:13, al:'center', grp:'k'},
+      {h:'K.Duzina\nm',   w:12, al:'center', grp:'k'},
+      {h:'K.Sort.',    w:21, al:'center', grp:'k'},
+      {h:'R.Precnik\ncm', w:13, al:'center', grp:'r'},
+      {h:'R.Duzina\nm',   w:12, al:'center', grp:'r'},
+      {h:'R.Sort.',    w:21, al:'center', grp:'r'},
+      {h:'D.Precnik',  w:12, al:'center', grp:'d'},
+      {h:'D.Duzina',   w:12, al:'center', grp:'d'},
+      {h:'D.Zap.\nm3', w:14, al:'center', grp:'d'},
+      {h:'D.Klasa',    w:17, al:'center', grp:'d'},
+      {h:'F',          w:5,  al:'center', grp:''},
+    ];
+    const tW = COLS.reduce((a,c)=>a+c.w,0);
+    const sc = CW / tW;
+    const RH = 5.8;
+    const GH = 4;  // grupa header visina
+    const CH = 9;  // kolona header visina
+
+    // Izracunaj x pozicije grupa
+    let cumX = mg;
+    let kX=0, rX=0, dX=0, kW=0, rW=0, dW=0;
+    COLS.forEach(c => {
+      const cw = c.w*sc;
+      if (c.grp==='k' && kX===0) kX=cumX;
+      if (c.grp==='r' && rX===0) rX=cumX;
+      if (c.grp==='d' && dX===0) dX=cumX;
+      if (c.grp==='k') kW+=cw;
+      if (c.grp==='r') rW+=cw;
+      if (c.grp==='d') dW+=cw;
+      cumX+=cw;
+    });
+
+    function crtajHeader(y) {
+      // Grupni red
+      doc.setFillColor(28,62,46); doc.rect(mg,y,CW,GH,'F');
+      doc.setFontSize(5.8); doc.setFont('helvetica','bold'); doc.setTextColor(150,210,175);
+      doc.text('KONTROLNI PREMJER', kX+kW/2, y+3,   {align:'center'});
+      doc.text('REDOVNI PREMJER',   rX+rW/2, y+3,   {align:'center'});
+      doc.text('RAZLIKE',           dX+dW/2, y+3,   {align:'center'});
+      // Vertikalni separatori
+      doc.setDrawColor(55,95,70); doc.setLineWidth(0.4);
+      doc.line(kX,y,kX,y+GH);
+      doc.line(rX,y,rX,y+GH);
+      doc.line(dX,y,dX,y+GH);
+      y+=GH;
+      // Kolona-zaglavlja
+      doc.setFillColor(34,70,52); doc.rect(mg,y,CW,CH,'F');
+      let cx=mg;
+      COLS.forEach(col => {
+        const cw=col.w*sc;
+        const lines=col.h.split('\n');
+        const by = lines.length>1 ? y+4 : y+6;
+        doc.setFontSize(5.8); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+        lines.forEach((ln,li) => {
+          const tx = col.al==='left' ? cx+1.5 : cx+cw/2;
+          doc.text(ln, tx, by+li*3.5, {align:col.al==='left'?'left':'center'});
+        });
+        // Separator
+        if (col.grp==='k'||col.grp==='r'||col.grp==='d') {
+          doc.setDrawColor(50,95,68); doc.setLineWidth(0.2);
+          doc.line(cx,y,cx,y+CH);
+        }
+        cx+=cw;
+      });
+      return y+CH;
+    }
+
+    y = crtajHeader(y);
+
+    rows.forEach((r, idx) => {
+      if (y+RH > H-13) { doc.addPage(); y=6; y=crtajHeader(y); }
+
+      const hd     = rowHasDiff(r);
+      const dPrec  = calcDiff(r.kPrec, r.rPrec);
+      const dDuz   = calcDiff(r.kDuz,  r.rDuz);
+      const vK     = calcV(r.kPrec, r.kDuz);
+      const vR     = calcV(r.rPrec, r.rDuz);
+      const dVrow  = (vK!==null&&vR!==null) ? (vK-vR) : null;
+      const dSort  = (r.kSort&&r.rSort&&r.kSort!==r.rSort)
+                     ? r.kSort.substring(0,7)+'->'+r.rSort.substring(0,7) : '';
+      const dvStr  = dVrow!==null ? (dVrow>=0?'+':'')+dVrow.toFixed(3) : '-';
+
+      // Pozadina
+      if (hd) { doc.setFillColor(255,241,240); }
+      else if (idx%2===0) { doc.setFillColor(247,252,249); }
+      else { doc.setFillColor(255,255,255); }
+      doc.rect(mg,y,CW,RH,'F');
+      // Blaga tinta za K i R grupe
+      doc.setFillColor(238,246,255); doc.rect(kX,y,kW,RH,'F');
+      doc.setFillColor(238,252,244); doc.rect(rX,y,rW,RH,'F');
+      // Prekrij s row bojom (alpha efekt)
+      if (hd) { doc.setFillColor(255,241,240); }
+      else if (idx%2===0) { doc.setFillColor(243,249,253); doc.rect(kX,y,kW,RH,'F'); doc.setFillColor(243,252,247); doc.rect(rX,y,rW,RH,'F'); }
+
+      const vals = [
+        String(idx+1), (r.vrsta||'').substring(0,12), (r.ploc||'').substring(0,9),
+        r.kPrec ? String(r.kPrec) : '-', r.kDuz ? parseFloat(r.kDuz).toFixed(2) : '-',
+        (r.kSort||'').substring(0,12),
+        r.rPrec ? String(r.rPrec) : '-', r.rDuz ? parseFloat(r.rDuz).toFixed(2) : '-',
+        (r.rSort||'').substring(0,12),
+        formatDiff(dPrec), formatDiff(dDuz), dvStr, dSort||'-',
+        r.photos&&r.photos.length>0 ? String(r.photos.length) : '',
+      ];
+
+      let cx=mg;
+      COLS.forEach((col, ci) => {
+        const cw=col.w*sc;
+        doc.setFontSize(6.2); doc.setFont('helvetica','normal');
+        // Boja teksta
+        if (ci===9) {
+          if (dPrec!==null&&Math.abs(dPrec)>0.001) { doc.setTextColor(dPrec>0?192:21, dPrec>0?57:101, dPrec>0?43:192); }
+          else { doc.setTextColor(190,190,190); }
+        } else if (ci===10) {
+          if (dDuz!==null&&Math.abs(dDuz)>0.001) { doc.setTextColor(dDuz>0?192:21, dDuz>0?57:101, dDuz>0?43:192); }
+          else { doc.setTextColor(190,190,190); }
+        } else if (ci===11) {
+          if (dVrow!==null&&Math.abs(dVrow)>0.001) { doc.setFont('helvetica','bold'); doc.setTextColor(dVrow>0?192:21, dVrow>0?57:101, dVrow>0?43:192); }
+          else { doc.setTextColor(190,190,190); }
+        } else if (ci===12) {
+          if (dSort) { doc.setFont('helvetica','bold'); doc.setTextColor(...RED); }
+          else { doc.setTextColor(190,190,190); }
+        } else if (ci===13&&r.photos&&r.photos.length>0) {
+          doc.setFont('helvetica','bold'); doc.setTextColor(...BLU);
+        } else {
+          doc.setTextColor(25,25,25);
+        }
+        const tx = col.al==='left' ? cx+1.5 : cx+cw/2;
+        doc.text(String(vals[ci]), tx, y+RH-1.4, {align:col.al==='left'?'left':'center'});
+        cx+=cw;
+      });
+
+      doc.setDrawColor(215,222,218); doc.setLineWidth(0.1);
+      doc.line(mg, y+RH, mg+CW, y+RH);
+      y+=RH;
+    });
+
+    // Napomena o Huberovoj formuli
+    y+=3;
+    if (y<H-12) {
+      doc.setFontSize(6.2); doc.setFont('helvetica','italic'); doc.setTextColor(...G5);
+      doc.text('* Zapremina racunata prema prostoj Huberovoj formuli:  V = (pi/4) x d2 x L   (d = precnik na sredini trupca u m,  L = duzina trupca u m)', mg, y);
+    }
+
+    // ── FOTOGRAFIJE ──────────────────────────────────────────────────
+    const photoRows = rows.filter(r=>r.photos&&r.photos.length>0);
+    if (photoRows.length > 0) {
+      doc.addPage();
+      doc.setFillColor(...GD); doc.rect(0,0,W,14,'F');
+      doc.setFontSize(11); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+      doc.text('FOTOGRAFIJE SORTIMENATA', mg, 9.5);
+      doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(180,220,190);
+      doc.text((meta.odjel||'-')+'  |  '+(meta.datum||'-')+'  |  '+(meta.kontrolor||'-'), W-mg, 9.5, {align:'right'});
+      y=18;
+
+      for (const r of photoRows) {
+        const rIdx = rows.findIndex(x=>x.id===r.id);
+        if (y+10>H-13) { doc.addPage(); y=6; }
+
+        doc.setFillColor(...GP); doc.rect(mg,y,CW,8,'F');
+        doc.setFontSize(8); doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+        const fCaption = 'Sortiment #'+(rIdx+1)+'  -  '+(r.vrsta||'?')+
+          '  |  Plocica: '+(r.ploc||'-')+
+          '  |  Precnik: '+(r.kPrec||'-')+' cm'+
+          '  |  Duzina: '+(r.kDuz?parseFloat(r.kDuz).toFixed(2)+' m':'-');
+        doc.text(fCaption, mg+3, y+5.5);
+        y+=10;
+
+        const PW=62, PH=46, GAP=4;
+        let px=mg;
+        for (let pi=0; pi<r.photos.length; pi++) {
+          if (px+PW>W-mg) { px=mg; y+=PH+GAP; }
+          if (y+PH>H-13)  { doc.addPage(); y=6; px=mg; }
+          try {
+            doc.addImage(r.photos[pi].data,'JPEG',px,y,PW,PH,undefined,'MEDIUM');
+            doc.setDrawColor(...GM); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
+            doc.setFontSize(5.5); doc.setTextColor(100,100,100); doc.setFont('helvetica','normal');
+            doc.text(r.photos[pi].name.substring(0,28), px, y+PH+3.5);
+          } catch(e) {}
+          px+=PW+GAP;
+        }
+        y+=PH+GAP+8;
+      }
+    }
+
+    // ── FOOTER na svim stranicama ─────────────────────────────────────
+    const pCnt = doc.getNumberOfPages();
+    for (let i=1; i<=pCnt; i++) {
+      doc.setPage(i);
+      doc.setFillColor(...G1); doc.rect(0,H-9,W,9,'F');
+      doc.setDrawColor(195,208,200); doc.setLineWidth(0.2); doc.line(mg,H-9,W-mg,H-9);
+      doc.setFontSize(6.2); doc.setFont('helvetica','normal'); doc.setTextColor(120,130,125);
+      const fTxt = 'SPD Unsko-sanske sume  |  Kontrola sjece  |  Odjel: '+(meta.odjel||'-')+
+        '  |  Datum: '+(meta.datum||'-')+
+        '  |  Kontrolant: '+(meta.kontrolor||'-')+
+        '  |  Primac: '+(meta.primka||'-');
+      doc.text(fTxt, mg, H-3.5);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+      doc.text(i+' / '+pCnt, W-mg, H-3.5, {align:'right'});
+    }
+
+    doc.save('kontrola_sjece_'+(meta.datum||'izvjestaj')+'.pdf');
+    showToast('PDF sacuvan');
+
+  } catch(err) {
+    console.error(err); alert('Greska pri generiranju PDF-a: '+err.message);
+  } finally {
+    document.getElementById('pdf-overlay').classList.remove('open');
+  }
+}
 
     // ── ZAGLAVLJE ──
     doc.setFillColor(...gd);
@@ -1474,6 +1824,16 @@ function showToast(msg) {
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
+
+// Popuni print meta prije štampe
+window.addEventListener('beforeprint', () => {
+  const meta = getMeta();
+  document.getElementById('pm-kontrolor').textContent = meta.kontrolor || '—';
+  document.getElementById('pm-primac').textContent    = meta.primka    || '—';
+  document.getElementById('pm-odjel').textContent     = meta.odjel     || '—';
+  document.getElementById('pm-datum').textContent     = meta.datum     || '—';
+  document.getElementById('print-datum-now').textContent = new Date().toLocaleString('bs-BA');
+});
 </script>
 </body>
 </html>
