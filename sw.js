@@ -1,4 +1,4 @@
-const CACHE = 'kp-v3';
+const CACHE = 'kp-v4';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './icons/icon-512.png',
   './icons/screenshot-narrow.png',
   './icons/screenshot-wide.png',
+  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
 ];
 
 self.addEventListener('install', e => {
