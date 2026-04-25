@@ -1332,42 +1332,40 @@ function exportWord() {
   const meta = getMeta();
   if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
 
-  const MIN_ROWS = 18;
-  const emptyCell = '<td style="height:15pt"></td>';
+  const MIN_ROWS = 20;
+  const fmtV = v => v !== null ? v.toFixed(3) : '';
+  const fmtD = v => v ? parseFloat(v).toFixed(2) : '';
 
   const dataRows = rows.map(r => {
     const vR = calcV(r.rPrec, r.rDuz);
     const vK = calcV(r.kPrec, r.kDuz);
     const hasDiff = rowHasDiff(r);
-    const bg = hasDiff ? ' bgcolor="#FFEEEE"' : '';
-    const fmtV = v => v !== null ? v.toFixed(3) : '';
-    const fmtD = v => v ? parseFloat(v).toFixed(2) : '';
+    const bg = hasDiff ? ' bgcolor="#FFE8E8"' : '';
     return `<tr${bg}>
       <td class="ct">${esc(r.vrsta||'')}</td>
-      <td class="ct" style="font-size:6pt">${esc(r.rSort||'')}</td>
+      <td class="ct">${esc(r.rSort||'')}</td>
       <td class="ct">${esc(r.ploc||'')}</td>
-      <td></td>
+      <td class="ct"></td>
       <td class="ct">${fmtD(r.rDuz)}</td>
       <td class="ct">${r.rPrec||''}</td>
-      <td></td>
+      <td class="ct"></td>
       <td class="ct">${fmtV(vR)}</td>
-      <td class="ct" style="font-size:6pt">${esc(r.kSort||'')}</td>
+      <td class="ct">${esc(r.kSort||'')}</td>
       <td class="ct">${fmtD(r.kDuz)}</td>
       <td class="ct">${r.kPrec||''}</td>
-      <td></td>
+      <td class="ct"></td>
       <td class="ct">${fmtV(vK)}</td>
-      <td>${esc(r.nap||'')}</td>
+      <td class="lt">${esc(r.nap||'')}</td>
     </tr>`;
   });
-
-  const extra = MIN_ROWS - rows.length;
+  const extra = Math.max(0, MIN_ROWS - rows.length);
   for (let i = 0; i < extra; i++) {
-    dataRows.push('<tr>' + emptyCell.repeat(14) + '</tr>');
+    dataRows.push('<tr><td style="height:13pt"></td>' + '<td></td>'.repeat(13) + '</tr>');
   }
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:w="urn:schemas-microsoft-com:office:word"
-  xmlns="http://www.w3.org/TR/REC-html40">
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="UTF-8">
 <!--[if gte mso 9]><xml>
@@ -1378,133 +1376,145 @@ function exportWord() {
 </xml><![endif]-->
 <style>
   @page WordSection1 {
-    size: 842.0pt 595.0pt;
-    margin: 24.0pt 28.0pt 24.0pt 28.0pt;
+    size: 842pt 595pt;
+    margin: 18pt 20pt 18pt 20pt;
     mso-page-orientation: landscape;
   }
   div.WordSection1 { page: WordSection1; }
-  body  { font-family: Arial, sans-serif; font-size: 8pt; color: #000; margin: 0; }
+  body { font-family: Arial, sans-serif; font-size: 7.5pt; color: #000; margin: 0; }
   table { border-collapse: collapse; }
-  td, th { border: 0.75pt solid #000; padding: 1.5pt 2pt; vertical-align: middle; font-size: 7pt; }
-  .nb  { border: none; }
-  .ct  { text-align: center; }
-  .lt  { text-align: left; }
-  .hd  { background-color: #1a3a2a; color: #fff; font-weight: bold; text-align: center; font-size: 6.5pt; }
-  .sh  { background-color: #2d6a4f; color: #fff; font-weight: bold; text-align: center; font-size: 6pt; }
-  p    { margin: 1pt 0; }
-  .bl  { font-weight: bold; }
+  td, th { border: 0.75pt solid #000; padding: 1pt 2pt; vertical-align: middle; font-size: 6.5pt; }
+  .nb { border: none; }
+  .ct { text-align: center; }
+  .lt { text-align: left; }
+  .hd { background-color: #1a3a2a; color: #fff; font-weight: bold; text-align: center; font-size: 6pt; }
+  .sh { background-color: #2d5a3f; color: #fff; font-weight: bold; text-align: center; font-size: 5.5pt; }
+  .bl { font-weight: bold; }
+  p { margin: 1pt 0; line-height: 1.2; }
 </style>
 </head>
 <body>
 <div class="WordSection1">
 
-<table style="width:100%; border:none; margin-bottom:3pt">
-  <tr>
-    <td class="nb ct" colspan="4" style="font-size:10pt; font-weight:bold; padding-bottom:0">PREGLED</td>
-  </tr>
-  <tr>
-    <td class="nb ct" colspan="4" style="font-size:9pt; font-weight:bold; padding:0">
-      IZVRŠENE KONTROLE PRIMIKE ŠUMSKIH SORTIMENATA
-    </td>
-  </tr>
-  <tr>
-    <td class="nb ct" colspan="4" style="font-size:8pt; font-weight:bold; padding-bottom:4pt">
-      ZA DAN/MIESEC ___.___ 201___ GODINE
-    </td>
-  </tr>
-  <tr>
-    <td class="nb lt" style="width:28%">PS/Pogon: ______________________________</td>
-    <td class="nb lt" style="width:28%">Gospodarska jedinica: ______________________</td>
-    <td class="nb lt" style="width:22%">Odjel: <b>${esc(meta.odjel||'____________')}</b></td>
-    <td class="nb lt" style="width:22%">Ugovor br.: _____________________</td>
-  </tr>
-  <tr>
-    <td class="nb lt" colspan="2">Izvođač radova: ___________________________ &nbsp;&nbsp; od 201___ god.</td>
-    <td class="nb lt" colspan="2">Preuzeti podaci iz knjige premjerbe br. ______ str. ______</td>
-  </tr>
+<table style="width:100%; border-collapse:collapse; border:none">
+<tr>
+
+  <!-- ===== LEFT: title + info header + measurement table ===== -->
+  <td style="width:83%; border:none; vertical-align:top; padding:0 3pt 0 0">
+
+    <!-- Title -->
+    <table style="width:100%; border:none; margin-bottom:1pt">
+      <tr><td class="nb ct" style="font-size:9.5pt; font-weight:bold; letter-spacing:0.5pt; padding-bottom:0">PREGLED</td></tr>
+      <tr><td class="nb ct" style="font-size:8pt; font-weight:bold; padding:0 0 1pt 0">IZVR&#x160;ENE KONTROLE PRIMIKE &#x160;UMSKIH SORTIMENATA</td></tr>
+      <tr><td class="nb ct" style="font-size:7.5pt; font-weight:bold; padding-bottom:2pt">ZA DAN/MJES&#x40;C ___.___. 201___ GODINE</td></tr>
+    </table>
+
+    <!-- Info header -->
+    <table style="width:100%; border:none; margin-bottom:2pt; font-size:6.5pt">
+      <tr>
+        <td class="nb lt" style="width:29%">PS/Pogon: ____________________________</td>
+        <td class="nb lt" style="width:34%">Gospodarska jedinica: _________________________</td>
+        <td class="nb lt" style="width:19%">Odjel: <b>${esc(meta.odjel||'____________')}</b></td>
+        <td class="nb lt" style="width:18%">Ugovor br.: _____________ od 201___ god.</td>
+      </tr>
+      <tr>
+        <td class="nb lt" colspan="2">Izvođač radova: ______________________________________</td>
+        <td class="nb lt" colspan="2">Preuzeti podaci iz knjige premjerbe br. ________ str. ________</td>
+      </tr>
+    </table>
+
+    <!-- Measurement table -->
+    <table style="width:100%; border-collapse:collapse">
+      <thead>
+        <tr>
+          <th class="hd" rowspan="2" style="width:6.5%">Vrsta<br>drveta</th>
+          <th class="hd" rowspan="2" style="width:6.5%">Vrsta<br>sort.</th>
+          <th class="hd" rowspan="2" style="width:5%">Broj<br>plo&#x010D;ice</th>
+          <th class="sh" colspan="5">Preuzeti podaci iz knjige premjerbe</th>
+          <th class="sh" colspan="5">Podaci kontrolnog premjera</th>
+          <th class="hd" rowspan="2" style="width:8.5%">Primjedba</th>
+        </tr>
+        <tr>
+          <th class="sh" style="width:4%">Klasa</th>
+          <th class="sh" style="width:5.5%">Du&#x017E;ina<br>(m)</th>
+          <th class="sh" style="width:5.5%">Pre&#x010D;nik<br>(cm)</th>
+          <th class="sh" style="width:5.5%">Dim.<br>slo&#x017E;aja</th>
+          <th class="sh" style="width:5%">V<br>(m&#xB3;)</th>
+          <th class="sh" style="width:4%">Klasa</th>
+          <th class="sh" style="width:5.5%">Du&#x017E;ina<br>(m)</th>
+          <th class="sh" style="width:5.5%">Pre&#x010D;nik<br>(cm)</th>
+          <th class="sh" style="width:5.5%">Dim.<br>slo&#x017E;aja</th>
+          <th class="sh" style="width:5%">V<br>(m&#xB3;)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataRows.join('\n        ')}
+      </tbody>
+    </table>
+
+  </td>
+
+  <!-- ===== RIGHT: Primač/Radnik panel ===== -->
+  <td style="width:17%; border:0.75pt solid #000; vertical-align:top; padding:3pt 4pt; font-size:6.5pt">
+    <p class="bl" style="margin-bottom:2pt">Prima&#x010D; na &#x161;umu panju:</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:6pt">&nbsp;</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:10pt">&nbsp;</p>
+    <p class="bl" style="margin-bottom:2pt">Radnik u primci:</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:6pt">&nbsp;</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:10pt">&nbsp;</p>
+    <p class="bl" style="margin-bottom:2pt">Kroj-a&#x010D;/razmjerac &#x160;os:</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:6pt">&nbsp;</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:10pt">&nbsp;</p>
+    <p class="bl" style="margin-bottom:2pt">Broj &#x161;abi&#x107;a primke:</p>
+    <p style="border-bottom:0.75pt solid #000; height:14pt; margin-bottom:6pt">&nbsp;</p>
+    <p class="bl" style="margin-bottom:2pt; margin-top:4pt">Prima&#x010D;:</p>
+    <p style="font-size:6.5pt">${esc(meta.primka||'_______________')}</p>
+  </td>
+
+</tr>
 </table>
 
-<table style="width:100%">
-  <thead>
-    <tr>
-      <th class="hd" rowspan="2" style="width:7%">Vrsta<br>drveta</th>
-      <th class="hd" rowspan="2" style="width:7%">Vrsta<br>sort.</th>
-      <th class="hd" rowspan="2" style="width:5.5%">Broj<br>plo&#x010D;ice</th>
-      <th class="sh" colspan="5">Preuzeti podaci iz knjige premjerbe</th>
-      <th class="sh" colspan="5">Podaci kontrolnog premjera</th>
-      <th class="hd" rowspan="2" style="width:9%">Primjedba</th>
-    </tr>
-    <tr>
-      <th class="sh" style="width:4.5%">Klasa</th>
-      <th class="sh" style="width:5.5%">Du&#x017E;ina<br>(m)</th>
-      <th class="sh" style="width:5.5%">Pre&#x010D;nik<br>(cm)</th>
-      <th class="sh" style="width:5.5%">Dim.<br>slo&#x017E;aja</th>
-      <th class="sh" style="width:5%">V<br>(m&#xB3;)</th>
-      <th class="sh" style="width:4.5%">Klasa</th>
-      <th class="sh" style="width:5.5%">Du&#x017E;ina<br>(m)</th>
-      <th class="sh" style="width:5.5%">Pre&#x010D;nik<br>(cm)</th>
-      <th class="sh" style="width:5.5%">Dim.<br>slo&#x017E;aja</th>
-      <th class="sh" style="width:5%">V<br>(m&#xB3;)</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${dataRows.join('\n    ')}
-  </tbody>
-</table>
-
-<table style="width:100%; border:none; margin-top:5pt">
+<!-- ===== BOTTOM: 4-column sections I–IV ===== -->
+<table style="width:100%; border-collapse:collapse; margin-top:3pt">
   <tr>
-    <td class="nb lt" style="width:26%">Prima&#x010D; na &#x161;umu panju:<br>_________________________________</td>
-    <td class="nb lt" style="width:26%">Radnik u primci:<br>_________________________________</td>
-    <td class="nb lt" style="width:26%">Kroj-a&#x010D;/razmjerac &#x160;os:<br>_________________________________</td>
-    <td class="nb lt" style="width:22%">Broj &#x161;abi&#x107;a primke: __________<br>
-      Prima&#x010D;: <b>${esc(meta.primka||'')}</b></td>
-  </tr>
-</table>
-
-<table style="width:100%; border:none; margin-top:6pt; font-size:7pt">
-  <tr>
-    <td class="nb" style="width:50%; vertical-align:top; padding-right:6pt">
-      <p class="bl">I &#x2013; Kvalitet krojena &#x160;DS-a</p>
-      <p>&#x25A1; Prima&#x010D; se prilikom krojena pridr&#x017E;ava odredaba standarda</p>
-      <p>&#x25A1; Prima&#x010D; se prilikom krojena ne pridr&#x017E;ava odredaba standarda:</p>
-      <p>&nbsp;&nbsp;&#x25A1; Krojenje vr&#x161;i od tanjeg ka debljem kraju vretena stabla</p>
-      <p>&nbsp;&nbsp;&#x25A1; Ne uo&#x010D;ava i ne uva&#x017E;ava gre&#x161;ke poprednog presjeka</p>
-      <p>&nbsp;&nbsp;&#x25A1; Ne uo&#x010D;ava i ne uva&#x017E;ava gre&#x161;ka plasta oblotine</p>
-      <p>&nbsp;&nbsp;&#x25A1; Du&#x017E;ina i pre&#x010D;nik/&#x010D;etiva prostornog drveta odstupaju od Standarda</p>
-      <p>&nbsp;&nbsp;&#x25A1; Mala iskori&#x161;tenost &#x2013; velik % otpada</p>
+    <td style="width:25%; border:0.75pt solid #000; vertical-align:top; padding:2pt 3pt; font-size:6pt">
+      <p class="bl" style="margin-bottom:2pt">I &#x2013; Kvalitet krojena &#x160;DS-a</p>
+      <p>&#x25A1; Prima&#x010D; se pridr&#x017E;ava odredaba standarda</p>
+      <p>&#x25A1; Prima&#x010D; se NE pridr&#x017E;ava odredaba standarda:</p>
+      <p>&nbsp;&#x25A1; Krojenje vr&#x161;i od tanjeg ka debljem kraju</p>
+      <p>&nbsp;&#x25A1; Ne uo&#x010D;ava gre&#x161;ke poprednog presjeka</p>
+      <p>&nbsp;&#x25A1; Ne uo&#x010D;ava gre&#x161;ke plasta oblotine</p>
+      <p>&nbsp;&#x25A1; Du&#x017E;ina i pre&#x010D;nik odstupaju od standarda</p>
+      <p>&nbsp;&#x25A1; Mala iskori&#x161;tenost &#x2013; velik % otpada</p>
     </td>
-    <td class="nb" style="width:50%; vertical-align:top">
-      <p class="bl">II &#x2013; Uspostava &#x161;umskog reda</p>
-      <p>&#x25A1; &#x160;umski red nije uspostavljen u skladu s Pravilnikom</p>
-      <p>&#x25A1; &#x160;umski red nije uspostavljen u skladu s Pravilnikom:</p>
-      <p>&nbsp;&nbsp;&#x25A1; Grane listopara nisu zasa&#x010D;ene na 1 m i razbacane po sje&#x010D;ini</p>
-      <p>&nbsp;&nbsp;&#x25A1; Nisu okorani panjevi za&#x161;titnih stabala &#x010D;etinara</p>
-      <p>&nbsp;&nbsp;&#x25A1; Nisu proplano obilje&#x017E;ene ustave</p>
-      <p>&nbsp;&nbsp;&#x25A1; Gromade &#x010D;etinara nisu proplano slo&#x017E;ene</p>
-      <p>&nbsp;&nbsp;&#x25A1; Slaganje prostornog drveta uz &#x017E;iva stabla</p>
+    <td style="width:25%; border:0.75pt solid #000; vertical-align:top; padding:2pt 3pt; font-size:6pt">
+      <p class="bl" style="margin-bottom:2pt">II &#x2013; Uspostava &#x161;umskog reda</p>
+      <p>&#x25A1; &#x160;umski red uspostavljen u skladu s Pravilnikom</p>
+      <p>&#x25A1; &#x160;umski red NIJE uspostavljen:</p>
+      <p>&nbsp;&#x25A1; Grane listopara nisu zasa&#x010D;ene na 1 m</p>
+      <p>&nbsp;&#x25A1; Nisu okorani panjevi za&#x161;titnih stabala &#x010D;etinara</p>
+      <p>&nbsp;&#x25A1; Nisu proplano obilje&#x017E;ene ustave</p>
+      <p>&nbsp;&#x25A1; Gromade &#x010D;etinara nisu proplano slo&#x017E;ene</p>
+      <p>&nbsp;&#x25A1; Slaganje prostornog drveta uz &#x017E;iva stabla</p>
     </td>
-  </tr>
-  <tr>
-    <td class="nb" style="vertical-align:top; padding-right:6pt; padding-top:3pt">
-      <p class="bl">III &#x2013; Kori&#x161;&#x107;enje HTZ-a i PPZ za&#x161;tite</p>
+    <td style="width:25%; border:0.75pt solid #000; vertical-align:top; padding:2pt 3pt; font-size:6pt">
+      <p class="bl" style="margin-bottom:2pt">III &#x2013; Kori&#x161;&#x107;enje HTZ-a i PPZ za&#x161;tite</p>
       <p>&#x25A1; Pridr&#x017E;ava se HTZ-a i PPZ odredaba</p>
       <p>&#x25A1; Ne pridr&#x017E;ava se HTZ-a i PPZ odredaba:</p>
-      <p>&nbsp;&nbsp;&#x25A1; Ne koriste se &#x161;ljemovi i rukavice</p>
-      <p>&nbsp;&nbsp;&#x25A1; Ne koristi se za&#x161;titno odjelo</p>
-      <p>&nbsp;&nbsp;&#x25A1; Nisu proplano obilje&#x017E;ena odjela</p>
-      <p>&nbsp;&nbsp;&#x25A1; Ne posljeduje litaru prvu pomo&#x107;</p>
-      <p>&nbsp;&nbsp;&#x25A1; Nedozvoljeno lo&#x017E;enje vatre</p>
+      <p>&nbsp;&#x25A1; Ne koriste se &#x161;ljemovi i rukavice</p>
+      <p>&nbsp;&#x25A1; Ne koristi se za&#x161;titno odjelo</p>
+      <p>&nbsp;&#x25A1; Nisu proplano obilje&#x017E;ena odjela</p>
+      <p>&nbsp;&#x25A1; Ne posjeduje litaru prve pomo&#x107;i</p>
+      <p>&nbsp;&#x25A1; Nedozvoljeno lo&#x017E;enje vatre</p>
     </td>
-    <td class="nb" style="vertical-align:top; padding-top:3pt">
-      <p class="bl">IV &#x2013; Napomena</p>
-      <p>_____________________________________________</p>
-      <p>_____________________________________________</p>
-      <p>_____________________________________________</p>
-      <br>
-      <p>Kontrolu izvr&#x161;io: <b>${esc(meta.kontrolor||'_______________________')}</b></p>
-      <br>
-      <p>___________________________________</p>
+    <td style="width:25%; border:0.75pt solid #000; vertical-align:top; padding:2pt 3pt; font-size:6pt">
+      <p class="bl" style="margin-bottom:2pt">IV &#x2013; Napomena</p>
+      <p>_________________________________</p>
+      <p>_________________________________</p>
+      <p>_________________________________</p>
+      <p>_________________________________</p>
+      <p style="margin-top:5pt">Kontrolu izvr&#x161;io: <b>${esc(meta.kontrolor||'')}</b></p>
+      <p style="margin-top:8pt">_________________________________</p>
       <p><i>(Ime i prezime)</i></p>
     </td>
   </tr>
