@@ -1686,8 +1686,8 @@ async function exportPDF() {
   if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
   if (!window.jspdf) {
     try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-    } catch(e) { alert('Nije moguce ucitati PDF biblioteku. Provjeri internet konekciju.'); return; }
+      await loadScript('./vendor/jspdf.umd.min.js');
+    } catch(e) { alert('Nije moguce ucitati PDF biblioteku.'); return; }
   }
 
   document.getElementById('pdf-overlay').classList.add('open');

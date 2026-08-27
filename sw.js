@@ -1,7 +1,8 @@
-const CACHE = 'kp-v5';
+const CACHE = 'kp-v6';
 
-// Lokalni fajlovi – MORAJU biti keširani da bi app radio offline.
-const CORE_ASSETS = [
+// Svi fajlovi se isporučuju uz app (nema više eksternog CDN-a) – moraju
+// se uspješno keširati da bi app radio 100% offline, od prvog otvaranja.
+const ASSETS = [
   './',
   './index.html',
   './manifest.json',
@@ -10,29 +11,12 @@ const CORE_ASSETS = [
   './icons/icon-512.png',
   './icons/screenshot-narrow.png',
   './icons/screenshot-wide.png',
-];
-
-// Eksterni resursi – keširaju se best-effort i NE smiju blokirati install.
-const CDN_ASSETS = [
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+  './vendor/jspdf.umd.min.js',
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(async c => {
-      // Ako bilo koji lokalni fajl ne uspije, cijela instalacija mora
-      // propasti (svi ovi fajlovi se isporucuju uz app i uvijek su dostupni).
-      await c.addAll(CORE_ASSETS);
-      // Eksterni CDN resurs kesiramo samo ako je dostupan; ako nema
-      // interneta (offline prvi otvor u sumi), instalacija se NE smije
-      // srusiti zbog toga – app mora raditi offline i bez PDF biblioteke.
-      await Promise.all(CDN_ASSETS.map(url =>
-        fetch(url).then(res => {
-          if (res.ok) return c.put(url, res);
-        }).catch(() => {})
-      ));
-      return self.skipWaiting();
-    })
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
