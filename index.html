@@ -254,6 +254,7 @@ body {
   outline: none; border-color: var(--gl); background: white;
 }
 .field-group input[type=number] { font-variant-numeric: tabular-nums; }
+.print-val { display: none; }
 
 /* Razlike prikaz */
 .diff-row {
@@ -459,10 +460,17 @@ body {
   .stablo-card.has-diff { border-left-color: #c0392b !important; }
   .stablo-card.ok       { border-left-color: #52b788 !important; }
   .card-body { display: block !important; }
+  .card-chevron { display: none !important; }
   .data-section { margin-top: 8px; }
   .input-row { gap: 4px; margin-bottom: 4px; }
   .field-group { gap: 1px; }
   .field-group label { font-size: 9px; }
+  .print-val {
+    display: block !important;
+    padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: #111; background: #f7f7f7;
+    min-height: 12px;
+  }
   .diff-row { gap: 4px; }
   .diff-box { padding: 4px 6px; }
 }
@@ -686,6 +694,13 @@ body {
       <div>
         <div>Izvezi Word obrazac</div>
         <div style="font-size:12px;color:var(--g5);">Pregled kontrole – popunjeni redovi za štampu</div>
+      </div>
+    </div>
+    <div class="menu-item" onclick="stampaj();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-green">🖨️</div>
+      <div>
+        <div>Štampaj</div>
+        <div style="font-size:12px;color:var(--g5);">Direktna štampa iz preglednika</div>
       </div>
     </div>
     <div class="menu-item" onclick="exportPDF();zatvoriModal('modal-meni')">
@@ -936,32 +951,38 @@ function makeCard(r, num) {
       <div class="field-group">
         <label>Vrsta drveta</label>
         ${makeSelectHTML(VRSTE, r.vrsta, r.id, 'vrsta')}
+        <span class="print-val">${esc(r.vrsta) || '—'}</span>
       </div>
       <div class="field-group">
         <label>Br. pločice</label>
         <input type="text" value="${esc(r.ploc)}" data-id="${r.id}" data-field="ploc" inputmode="text" autocomplete="off">
+        <span class="print-val">${esc(r.ploc) || '—'}</span>
       </div>
     </div>
     <div class="input-row">
       <div class="field-group">
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.kPrec)}" data-id="${r.id}" data-field="kPrec" inputmode="decimal" min="0" step="1" placeholder="0">
+        <span class="print-val">${esc(r.kPrec) || '—'}</span>
       </div>
       <div class="field-group">
         <label>Dužina (m)</label>
         <input type="number" value="${esc(r.kDuz)}" data-id="${r.id}" data-field="kDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        <span class="print-val">${esc(r.kDuz) || '—'}</span>
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
         ${makeSortSelectHTML(r.kSort, r.id, 'kSort')}
+        <span class="print-val">${esc(r.kSort) || '—'}</span>
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Napomena</label>
         <input type="text" value="${esc(r.nap)}" data-id="${r.id}" data-field="nap" placeholder="Opcionalno..." autocomplete="off">
+        <span class="print-val">${esc(r.nap) || '—'}</span>
       </div>
     </div>
   </div>`;
@@ -973,16 +994,19 @@ function makeCard(r, num) {
       <div class="field-group">
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.rPrec)}" data-id="${r.id}" data-field="rPrec" inputmode="decimal" min="0" step="1" placeholder="0">
+        <span class="print-val">${esc(r.rPrec) || '—'}</span>
       </div>
       <div class="field-group">
         <label>Dužina (m)</label>
         <input type="number" value="${esc(r.rDuz)}" data-id="${r.id}" data-field="rDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        <span class="print-val">${esc(r.rDuz) || '—'}</span>
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
         ${makeSortSelectHTML(r.rSort, r.id, 'rSort')}
+        <span class="print-val">${esc(r.rSort) || '—'}</span>
       </div>
     </div>
   </div>`;
@@ -1062,6 +1086,8 @@ function onInputChange(e) {
   const r = rows.find(x => x.id === id);
   if (!r) return;
   r[field] = e.target.value;
+  const pv = e.target.parentElement.querySelector('.print-val');
+  if (pv) pv.textContent = e.target.value || '—';
   updateCardDiffs(r);
   updateCardHeader(r);
   updateStats();
@@ -1557,9 +1583,37 @@ function exportCSV() {
 }
 
 // ══════════════════════════════════════════
+//  ŠTAMPAJ (direktna štampa iz preglednika)
+// ══════════════════════════════════════════
+function stampaj() {
+  if (rows.length === 0) { showToast('Nema zapisa za štampu'); return; }
+  const bila = rows.filter(r => r.expanded).map(r => r.id);
+  rows.forEach(r => r.expanded = true);
+  renderLista();
+  const vrati = () => {
+    rows.forEach(r => r.expanded = bila.includes(r.id));
+    renderLista();
+    window.removeEventListener('afterprint', vrati);
+  };
+  window.addEventListener('afterprint', vrati);
+  window.print();
+}
+
+function imgFormat(dataUrl) {
+  const m = /^data:image\/([a-z0-9]+)/i.exec(dataUrl||'');
+  const t = m ? m[1].toLowerCase() : '';
+  if (t === 'png')  return 'PNG';
+  if (t === 'webp') return 'WEBP';
+  if (t === 'gif')  return 'GIF';
+  if (t === 'bmp')  return 'BMP';
+  return 'JPEG';
+}
+
+// ══════════════════════════════════════════
 //  EXPORT PDF
 // ══════════════════════════════════════════
 async function exportPDF() {
+  if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
   if (!window.jspdf) {
     try {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
@@ -1583,7 +1637,7 @@ async function exportPDF() {
     const RED = [192,57,43], BLU = [21,101,192];
 
     // Izracunaj statistike
-    let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0;
+    let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0, skippedPhotos=0;
     rows.forEach(r => {
       const dp=calcDiff(r.kPrec,r.rPrec), dd=calcDiff(r.kDuz,r.rDuz);
       if (dp!==null&&Math.abs(dp)>0.001) diffPrec++;
@@ -1836,11 +1890,14 @@ async function exportPDF() {
           if (px+PW>W-mg) { px=mg; y+=PH+GAP; }
           if (y+PH>H-13)  { doc.addPage(); y=6; px=mg; }
           try {
-            doc.addImage(r.photos[pi].data,'JPEG',px,y,PW,PH,undefined,'MEDIUM');
+            doc.addImage(r.photos[pi].data,imgFormat(r.photos[pi].data),px,y,PW,PH,undefined,'MEDIUM');
             doc.setDrawColor(...GM); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
             doc.setFontSize(5.5); doc.setTextColor(100,100,100); doc.setFont('helvetica','normal');
             doc.text(r.photos[pi].name.substring(0,28), px, y+PH+3.5);
-          } catch(e) {}
+          } catch(e) {
+            console.error('addImage failed za '+r.photos[pi].name, e);
+            skippedPhotos++;
+          }
           px+=PW+GAP;
         }
         y+=PH+GAP+8;
@@ -1864,7 +1921,7 @@ async function exportPDF() {
     }
 
     doc.save('kontrola_sjece_'+(meta.datum||'izvjestaj')+'.pdf');
-    showToast('PDF sacuvan');
+    showToast(skippedPhotos>0 ? `PDF sacuvan (${skippedPhotos} foto nije ucitano)` : 'PDF sacuvan');
 
   } catch(err) {
     console.error(err); alert('Greska pri generiranju PDF-a: '+err.message);
