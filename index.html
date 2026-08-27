@@ -483,6 +483,19 @@ body {
   position: sticky; top: 0; z-index: 50;
   box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
+.home-tabs {
+  display: flex; gap: 6px; padding: 10px 16px 0;
+  background: var(--gd); position: sticky; top: 62px; z-index: 49;
+}
+.home-tab {
+  flex: 1; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7);
+  padding: 10px 8px; font-size: 13px; font-weight: 700;
+  border-radius: 10px 10px 0 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.home-tab.active { background: var(--g1); color: var(--gd); }
 .home-lista {
   padding: 14px 16px;
   padding-bottom: calc(90px + var(--safe-bottom));
@@ -540,8 +553,12 @@ body {
       </div>
     </div>
   </div>
+  <div class="home-tabs">
+    <button class="home-tab active" id="tab-sjeca" onclick="setHomeTab('sjeca')">🌲 Sječa</button>
+    <button class="home-tab" id="tab-otprema" onclick="setHomeTab('otprema')">🚚 Otprema</button>
+  </div>
   <div class="home-lista" id="home-lista"></div>
-  <button class="fab" onclick="novaKontrola()" title="Nova kontrola">+</button>
+  <button class="fab" onclick="novaKontrola(homeTab)" title="Nova kontrola">+</button>
 </div>
 
 <!-- ══ SCREEN KONTROLA ══ -->
@@ -551,9 +568,9 @@ body {
 <div class="header">
   <div class="header-top">
     <div class="header-logo">
-      <div class="logo-icon">🌲</div>
+      <div class="logo-icon" id="kontrola-icon">🌲</div>
       <div class="logo-text">
-        <h1>Kontrola sječe</h1>
+        <h1 id="kontrola-title">Kontrola sječe</h1>
         <p>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; offline</p>
       </div>
     </div>
@@ -577,8 +594,12 @@ body {
       <input type="text" id="meta-kontrolor" placeholder="Ime i prezime">
     </div>
     <div class="meta-field">
-      <label>Primač</label>
+      <label id="lbl-primka">Primač</label>
       <input type="text" id="meta-primka" placeholder="Ime primača">
+    </div>
+    <div class="meta-field" id="mf-otpr" style="display:none">
+      <label>Broj otpremnice</label>
+      <input type="text" id="meta-otpr" placeholder="Broj otpremnice">
     </div>
     <div class="meta-field meta-full">
       <label>Napomena</label>
@@ -589,14 +610,15 @@ body {
 
 <!-- ══ PRINT HEADER (skriveno na ekranu, vidljivo pri štampi) ══ -->
 <div class="print-header">
-  <h2>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata</h2>
+  <h2 id="print-title">ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata</h2>
   <p id="print-sub">Datum štampe: <span id="print-datum-now"></span></p>
 </div>
 <div class="print-meta" style="display:none">
   <div class="print-meta-field"><span>Kontrolant</span><strong id="pm-kontrolor">—</strong></div>
-  <div class="print-meta-field"><span>Primač</span><strong id="pm-primac">—</strong></div>
+  <div class="print-meta-field"><span id="pm-primac-lbl">Primač</span><strong id="pm-primac">—</strong></div>
   <div class="print-meta-field"><span>Odjel / Lokacija</span><strong id="pm-odjel">—</strong></div>
   <div class="print-meta-field"><span>Datum</span><strong id="pm-datum">—</strong></div>
+  <div class="print-meta-field" id="pm-otpr-field" style="display:none"><span>Broj otpremnice</span><strong id="pm-otpr">—</strong></div>
 </div>
 
 <!-- ══ STATS BAR ══ -->
@@ -682,14 +704,14 @@ body {
         <div style="font-size:12px;color:var(--g5);">Otvori prethodno sačuvan fajl</div>
       </div>
     </div>
-    <div class="menu-item" onclick="exportCSV();zatvoriModal('modal-meni')">
+    <div class="menu-item" id="mi-csv" onclick="exportCSV();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-amber">📊</div>
       <div>
         <div>Izvezi CSV</div>
         <div style="font-size:12px;color:var(--g5);">Za Excel / LibreOffice</div>
       </div>
     </div>
-    <div class="menu-item" onclick="exportWord();zatvoriModal('modal-meni')">
+    <div class="menu-item" id="mi-word" onclick="exportWord();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-blue">📝</div>
       <div>
         <div>Izvezi Word obrazac</div>
@@ -792,6 +814,50 @@ let idCnt = 0;
 let currentFotoId = null;
 let kontrole = [];
 let activeId  = null;
+let activeTip = 'sjeca';
+let homeTab   = 'sjeca';
+
+const TIP_UI = {
+  sjeca: {
+    icon: '🌲',
+    naslov: 'Kontrola sječe',
+    printNaslov: 'ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata',
+    primkaLabel: 'Primač',
+    primkaPlaceholder: 'Ime primača',
+    kSekcija: 'Kontrolni premjer',
+    rSekcija: 'Redovni premjer',
+  },
+  otprema: {
+    icon: '🚚',
+    naslov: 'Kontrola otpreme',
+    printNaslov: 'ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola otpreme šumskih sortimenata',
+    primkaLabel: 'Kupac',
+    primkaPlaceholder: 'Naziv kupca',
+    kSekcija: 'Utvrđeno kontrolom',
+    rSekcija: 'Prema otpremnici',
+  },
+};
+
+function applyTipUI(tip) {
+  const u = TIP_UI[tip] || TIP_UI.sjeca;
+  document.getElementById('kontrola-icon').textContent  = u.icon;
+  document.getElementById('kontrola-title').textContent = u.naslov;
+  document.getElementById('print-title').innerHTML      = u.printNaslov;
+  document.getElementById('lbl-primka').textContent      = u.primkaLabel;
+  document.getElementById('meta-primka').placeholder     = u.primkaPlaceholder;
+  document.getElementById('pm-primac-lbl').textContent   = u.primkaLabel;
+  document.getElementById('mf-otpr').style.display       = tip === 'otprema' ? '' : 'none';
+  document.getElementById('pm-otpr-field').style.display = tip === 'otprema' ? '' : 'none';
+  document.getElementById('mi-csv').style.display        = tip === 'otprema' ? 'none' : '';
+  document.getElementById('mi-word').style.display       = tip === 'otprema' ? 'none' : '';
+}
+
+function setHomeTab(tip) {
+  homeTab = tip;
+  document.getElementById('tab-sjeca').classList.toggle('active', tip === 'sjeca');
+  document.getElementById('tab-otprema').classList.toggle('active', tip === 'otprema');
+  renderHome();
+}
 
 // ══════════════════════════════════════════
 //  INIT
@@ -946,7 +1012,7 @@ function makeCard(r, num) {
 
   // ── Kontrolni premjer ──
   body.innerHTML += `<div class="data-section">
-    <span class="section-label sl-kontrolni">Kontrolni premjer</span>
+    <span class="section-label sl-kontrolni">${TIP_UI[activeTip].kSekcija}</span>
     <div class="input-row">
       <div class="field-group">
         <label>Vrsta drveta</label>
@@ -989,7 +1055,7 @@ function makeCard(r, num) {
 
   // ── Redovni premjer ──
   body.innerHTML += `<div class="data-section">
-    <span class="section-label sl-redovni">Redovni premjer</span>
+    <span class="section-label sl-redovni">${TIP_UI[activeTip].rSekcija}</span>
     <div class="input-row">
       <div class="field-group">
         <label>Prečnik (cm)</label>
@@ -1293,20 +1359,22 @@ function uvezi() {
 // ══════════════════════════════════════════
 function getMeta() {
   return {
-    odjel:     document.getElementById('meta-odjel').value,
-    datum:     document.getElementById('meta-datum').value,
-    kontrolor: document.getElementById('meta-kontrolor').value,
-    primka:    document.getElementById('meta-primka').value,
-    napomena:  document.getElementById('meta-napomena').value,
+    odjel:          document.getElementById('meta-odjel').value,
+    datum:          document.getElementById('meta-datum').value,
+    kontrolor:      document.getElementById('meta-kontrolor').value,
+    primka:         document.getElementById('meta-primka').value,
+    brojOtpremnice: document.getElementById('meta-otpr').value,
+    napomena:       document.getElementById('meta-napomena').value,
   };
 }
 function setMeta(m) {
   if (!m) return;
-  document.getElementById('meta-odjel').value     = m.odjel     || '';
-  document.getElementById('meta-datum').value     = m.datum     || '';
-  document.getElementById('meta-kontrolor').value = m.kontrolor || '';
-  document.getElementById('meta-primka').value    = m.primka    || '';
-  document.getElementById('meta-napomena').value  = m.napomena  || '';
+  document.getElementById('meta-odjel').value     = m.odjel          || '';
+  document.getElementById('meta-datum').value     = m.datum          || '';
+  document.getElementById('meta-kontrolor').value = m.kontrolor      || '';
+  document.getElementById('meta-primka').value    = m.primka         || '';
+  document.getElementById('meta-otpr').value      = m.brojOtpremnice || '';
+  document.getElementById('meta-napomena').value  = m.napomena       || '';
 }
 
 function spremi() {
@@ -1355,6 +1423,7 @@ function novaLista() {
 //  EXPORT WORD
 // ══════════════════════════════════════════
 function exportWord() {
+  if (activeTip === 'otprema') { showToast('Word obrazac je dostupan samo za Kontrolu sječe'); return; }
   const meta = getMeta();
   if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
 
@@ -1563,6 +1632,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
 //  EXPORT CSV
 // ══════════════════════════════════════════
 function exportCSV() {
+  if (activeTip === 'otprema') { showToast('CSV izvoz je dostupan samo za Kontrolu sječe'); return; }
   const meta = getMeta();
   let csv = '\uFEFF';
   csv += `Kontrola sječe šumskih sortimenata\nOdjel;${meta.odjel}\nDatum;${meta.datum}\nKontrolante;${meta.kontrolor}\nPrimač;${meta.primka}\n\n`;
@@ -1651,11 +1721,12 @@ async function exportPDF() {
     const ukDiff = diffPrec + diffDuz + diffKlas;
 
     // ── ZAGLAVLJE ────────────────────────────────────────────────────
+    const jeOtprema = activeTip === 'otprema';
     doc.setFillColor(...GD); doc.rect(0,0,W,17,'F');
     doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
     doc.text('SPD UNSKO SANSKE SUME', mg, 8);
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(160,210,180);
-    doc.text('KONTROLA SJECE SUMSKIH SORTIMENATA', mg, 14);
+    doc.text(jeOtprema ? 'KONTROLA OTPREME SUMSKIH SORTIMENATA' : 'KONTROLA SJECE SUMSKIH SORTIMENATA', mg, 14);
     doc.setFontSize(7); doc.setTextColor(200,230,210);
     const genDatum = new Date().toLocaleDateString('hr-HR');
     const genVrijeme = new Date().toLocaleTimeString('hr-HR');
@@ -1666,10 +1737,11 @@ async function exportPDF() {
     doc.setFillColor(...GM); doc.rect(0,y,W,14,'F');
     const metaPolja = [
       ['KONTROLANT', meta.kontrolor||'nije uneseno'],
-      ['PRIMAC',     meta.primka   ||'nije uneseno'],
+      [jeOtprema ? 'KUPAC' : 'PRIMAC', meta.primka||'nije uneseno'],
       ['ODJEL',      meta.odjel    ||'nije uneseno'],
       ['DATUM',      meta.datum    ||'nije uneseno'],
     ];
+    if (jeOtprema) metaPolja.push(['BR. OTPREMNICE', meta.brojOtpremnice||'nije uneseno']);
     const mfw = (CW-38) / metaPolja.length;
     metaPolja.forEach(([lab, val], i) => {
       const mx = mg + i * (mfw + 38/metaPolja.length);
@@ -1753,8 +1825,8 @@ async function exportPDF() {
       // Grupni red
       doc.setFillColor(28,62,46); doc.rect(mg,y,CW,GH,'F');
       doc.setFontSize(5.8); doc.setFont('helvetica','bold'); doc.setTextColor(150,210,175);
-      doc.text('KONTROLNI PREMJER', kX+kW/2, y+3,   {align:'center'});
-      doc.text('REDOVNI PREMJER',   rX+rW/2, y+3,   {align:'center'});
+      doc.text(jeOtprema ? 'UTVRDJENO KONTROLOM' : 'KONTROLNI PREMJER', kX+kW/2, y+3,   {align:'center'});
+      doc.text(jeOtprema ? 'PREMA OTPREMNICI'    : 'REDOVNI PREMJER',   rX+rW/2, y+3,   {align:'center'});
       doc.text('RAZLIKE',           dX+dW/2, y+3,   {align:'center'});
       // Vertikalni separatori
       doc.setDrawColor(55,95,70); doc.setLineWidth(0.4);
@@ -1911,16 +1983,17 @@ async function exportPDF() {
       doc.setFillColor(...G1); doc.rect(0,H-9,W,9,'F');
       doc.setDrawColor(195,208,200); doc.setLineWidth(0.2); doc.line(mg,H-9,W-mg,H-9);
       doc.setFontSize(6.2); doc.setFont('helvetica','normal'); doc.setTextColor(120,130,125);
-      const fTxt = 'SPD Unsko-sanske sume  |  Kontrola sjece  |  Odjel: '+(meta.odjel||'-')+
+      const fTxt = 'SPD Unsko-sanske sume  |  '+(jeOtprema?'Kontrola otpreme':'Kontrola sjece')+'  |  Odjel: '+(meta.odjel||'-')+
         '  |  Datum: '+(meta.datum||'-')+
         '  |  Kontrolant: '+(meta.kontrolor||'-')+
-        '  |  Primac: '+(meta.primka||'-');
+        '  |  '+(jeOtprema?'Kupac':'Primac')+': '+(meta.primka||'-')+
+        (jeOtprema ? '  |  Otpremnica: '+(meta.brojOtpremnice||'-') : '');
       doc.text(fTxt, mg, H-3.5);
       doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
       doc.text(i+' / '+pCnt, W-mg, H-3.5, {align:'right'});
     }
 
-    doc.save('kontrola_sjece_'+(meta.datum||'izvjestaj')+'.pdf');
+    doc.save((jeOtprema?'kontrola_otpreme_':'kontrola_sjece_')+(meta.datum||'izvjestaj')+'.pdf');
     showToast(skippedPhotos>0 ? `PDF sacuvan (${skippedPhotos} foto nije ucitano)` : 'PDF sacuvan');
 
   } catch(err) {
@@ -1946,7 +2019,7 @@ function loadAll() {
         const data = JSON.parse(old);
         if (data.rows && data.rows.length > 0) {
           kontrole.push({
-            id: genId(), meta: data.meta || {},
+            id: genId(), tip: 'sjeca', meta: data.meta || {},
             rows: data.rows, idCnt: data.idCnt || data.rows.length,
             created: new Date().toISOString(), updated: new Date().toISOString()
           });
@@ -1955,6 +2028,10 @@ function loadAll() {
       }
     } catch(e) {}
   }
+  // Stare kontrole (prije uvođenja Kontrole otpreme) nemaju "tip" – tretiramo ih kao Kontrolu sječe.
+  let migrirano = false;
+  kontrole.forEach(k => { if (!k.tip) { k.tip = 'sjeca'; migrirano = true; } });
+  if (migrirano) saveAll();
 }
 
 function saveAll() {
@@ -1980,10 +2057,12 @@ function showScreen(name) {
   document.getElementById('screen-kontrola').style.display = name === 'kontrola' ? '' : 'none';
 }
 
-function novaKontrola() {
+function novaKontrola(tip) {
+  tip = tip === 'otprema' ? 'otprema' : 'sjeca';
   const k = {
     id: genId(),
-    meta: { odjel: '', datum: new Date().toISOString().split('T')[0], kontrolor: '', primka: '', napomena: '' },
+    tip,
+    meta: { odjel: '', datum: new Date().toISOString().split('T')[0], kontrolor: '', primka: '', brojOtpremnice: '', napomena: '' },
     rows: [], idCnt: 0,
     created: new Date().toISOString(), updated: new Date().toISOString()
   };
@@ -1996,8 +2075,10 @@ function openKontrola(id) {
   const k = kontrole.find(k => k.id === id);
   if (!k) return;
   activeId = id;
+  activeTip = k.tip || 'sjeca';
   rows = k.rows.map(r => ({...r}));
   idCnt = k.idCnt || 0;
+  applyTipUI(activeTip);
   setMeta(k.meta);
   document.getElementById('filter-vrsta').value   = '';
   document.getElementById('filter-razlika').value = '';
@@ -2017,16 +2098,18 @@ function backToHome() {
 
 function renderHome() {
   const lista = document.getElementById('home-lista');
-  if (kontrole.length === 0) {
+  const zaTab = kontrole.filter(k => (k.tip || 'sjeca') === homeTab);
+  if (zaTab.length === 0) {
+    const naziv = homeTab === 'otprema' ? 'kontrolu otpreme' : 'kontrolu sječe';
     lista.innerHTML = `<div class="empty-state">
-      <div class="ei">🌲</div>
+      <div class="ei">${homeTab === 'otprema' ? '🚚' : '🌲'}</div>
       <h3>Nema sačuvanih kontrola</h3>
-      <p>Tapni zeleno <strong>+</strong> dugme da kreiraš prvu kontrolu.</p>
+      <p>Tapni zeleno <strong>+</strong> dugme da kreiraš prvu ${naziv}.</p>
     </div>`;
     return;
   }
   const groups = {};
-  kontrole.forEach(k => {
+  zaTab.forEach(k => {
     const odjel = (k.meta && k.meta.odjel) ? k.meta.odjel : '(bez odjela)';
     if (!groups[odjel]) groups[odjel] = [];
     groups[odjel].push(k);
@@ -2046,7 +2129,8 @@ function makeKontrolaCard(k) {
   const nRows     = k.rows ? k.rows.length : 0;
   const nDiff     = k.rows ? k.rows.filter(r => rowHasDiff(r)).length : 0;
   const datum     = (k.meta && k.meta.datum)     ? k.meta.datum     : '—';
-  const primac    = (k.meta && k.meta.primka)    ? k.meta.primka    : '(bez primača)';
+  const primacLbl = (k.tip === 'otprema') ? 'kupca' : 'primača';
+  const primac    = (k.meta && k.meta.primka)    ? k.meta.primka    : `(bez ${primacLbl})`;
   const kontrolor = (k.meta && k.meta.kontrolor) ? k.meta.kontrolor : '—';
   const hasDiff   = nDiff > 0;
   const statusStr = nRows === 0 ? '' :
@@ -2112,6 +2196,7 @@ window.addEventListener('beforeprint', () => {
   document.getElementById('pm-primac').textContent    = meta.primka    || '—';
   document.getElementById('pm-odjel').textContent     = meta.odjel     || '—';
   document.getElementById('pm-datum').textContent     = meta.datum     || '—';
+  document.getElementById('pm-otpr').textContent      = meta.brojOtpremnice || '—';
   document.getElementById('print-datum-now').textContent = new Date().toLocaleString('bs-BA');
 });
 </script>
