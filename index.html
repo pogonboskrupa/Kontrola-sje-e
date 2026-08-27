@@ -405,6 +405,56 @@ body {
 .pdf-overlay p { color: white; font-size: 15px; font-weight: 600; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ══ REKAP TABLA ══ */
+.rekap-meta {
+  font-size: 12px; color: var(--g5);
+  background: var(--g1); border-radius: 8px;
+  padding: 8px 12px; margin-bottom: 12px; line-height: 1.8;
+}
+.rekap-meta strong { color: var(--g9); }
+.rekap-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 4px; }
+.rekap-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+  min-width: 420px;
+}
+.rekap-table th {
+  background: var(--gd); color: white;
+  padding: 7px 6px; text-align: center;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.rekap-table th:first-child, .rekap-table th:nth-child(2) { text-align: left; }
+.rekap-table td {
+  padding: 7px 6px; border-bottom: 1px solid var(--g1);
+  vertical-align: middle; white-space: nowrap;
+}
+.rekap-table td:nth-child(n+3) { text-align: right; }
+.rekap-table td:nth-child(3) { text-align: center; }
+.rekap-table tbody tr:hover { background: var(--g1); }
+.rekap-table tfoot td {
+  background: var(--gp); font-weight: 700;
+  border-top: 2px solid var(--gm); padding: 9px 6px;
+}
+.rekap-table tfoot td:nth-child(n+3) { text-align: right; }
+.rekap-table tfoot td:nth-child(3) { text-align: center; }
+
+/* ══ VOL DISPLAY ══ */
+.vol-display {
+  margin-top: 7px; padding: 7px 12px;
+  background: linear-gradient(135deg, #e3f2fd, #f0f9ff);
+  border-radius: 8px; font-size: 13px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-left: 3px solid var(--blue);
+}
+.vol-display.redovni {
+  background: linear-gradient(135deg, var(--gp), #f0fff4);
+  border-left-color: var(--gm);
+}
+.vol-display-label { color: var(--g5); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
+.vol-display-value { font-weight: 700; color: var(--blue); font-size: 16px; font-variant-numeric: tabular-nums; }
+.vol-display.redovni .vol-display-value { color: var(--gm); }
+
 /* ══ TOAST ══ */
 .toast {
   position: fixed; bottom: calc(84px + var(--safe-bottom)); left: 50%;
@@ -660,6 +710,13 @@ body {
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <h3>Opcije</h3>
+    <div class="menu-item" onclick="zatvoriModal('modal-meni');otvoriRekap()">
+      <div class="menu-icon mi-amber">📊</div>
+      <div>
+        <div>Rekap kontrole</div>
+        <div style="font-size:12px;color:var(--g5);">Pregled po vrsti i sortimentu – ukupni volumeni</div>
+      </div>
+    </div>
     <div class="menu-item" onclick="spremi();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-green">💾</div>
       <div>
@@ -748,6 +805,18 @@ body {
   </div>
 </div>
 
+<!-- ══ REKAP MODAL ══ -->
+<div class="modal-overlay" id="modal-rekap" onclick="zatvoriModal('modal-rekap')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-height:92vh">
+    <div class="modal-handle"></div>
+    <h3>📊 Rekap kontrole</h3>
+    <div id="rekap-sadrzaj"></div>
+    <div class="modal-btns">
+      <button class="btn btn-cancel" onclick="zatvoriModal('modal-rekap')">Zatvori</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ PDF OVERLAY ══ -->
 <div class="pdf-overlay" id="pdf-overlay">
   <div class="pdf-spinner"></div>
@@ -760,20 +829,18 @@ body {
 // ══════════════════════════════════════════
 const VRSTE = ['Bukva','Jela','Smrča','Javor','Jasen','Lipa'];
 
-const SORTIMENTI = [
-  'Trupac I','Trupac II','Trupac III',
-  'Furnirski trupac',
-  'Celuloza duga','Celuloza kratka',
-  'Rudničko drvo',
-  'Ogrijev dugi','Ogrijev kratki',
-  'Ostalo tehničko','Otpad',''
-];
+const VRSTE_LISCARI  = ['Bukva','Javor','Jasen','Lipa'];
+const VRSTE_CETINARI = ['Jela','Smrča'];
+
+const SORTIMENTI_LISCARI  = ['I KLASA','II KLASA','III KLASA','F/L','OGR. U DUGOM','OGR.CIJEPANI','GULE'];
+const SORTIMENTI_CETINARI = ['I KLASA','II KLASA','III KLASA','F/L','CEL.DUGA','CEL.CIJEPANA','ŠKART'];
 
 // ══════════════════════════════════════════
 //  STANJE
 // ══════════════════════════════════════════
 let rows = [];
 let idCnt = 0;
+let lastVrsta = '';
 let currentFotoId = null;
 let kontrole = [];
 let activeId  = null;
@@ -827,16 +894,18 @@ function addRow(data) {
   const id = idCnt++;
   const r = {
     id,
-    vrsta:  data?.vrsta  || '',
-    ploc:   data?.ploc   || '',
-    kPrec:  data?.kPrec  || '',
-    kDuz:   data?.kDuz   || '',
-    kSort:  data?.kSort  || '',
-    nap:    data?.nap    || '',
-    rPrec:  data?.rPrec  || '',
-    rDuz:   data?.rDuz   || '',
-    rSort:  data?.rSort  || '',
-    photos: data?.photos || [],
+    vrsta:    data?.vrsta    || lastVrsta || '',
+    ploc:     data?.ploc     || '',
+    kPrec:    data?.kPrec    || '',
+    kDuz:     data?.kDuz     || '',
+    kSort:    data?.kSort    || '',
+    kSlozDim: data?.kSlozDim || '',
+    nap:      data?.nap      || '',
+    rPrec:    data?.rPrec    || '',
+    rDuz:     data?.rDuz     || '',
+    rSort:    data?.rSort    || '',
+    rSlozDim: data?.rSlozDim || '',
+    photos:   data?.photos   || [],
     expanded: true,
   };
   rows.push(r);
@@ -893,8 +962,8 @@ function makeCard(r, num) {
   const hasDiff = rowHasDiff(r);
   const dPrec = calcDiff(r.kPrec, r.rPrec);
   const dDuz  = calcDiff(r.kDuz, r.rDuz);
-  const vK    = calcV(r.kPrec, r.kDuz);
-  const vR    = calcV(r.rPrec, r.rDuz);
+  const vK    = calcVRow(r, 'k');
+  const vR    = calcVRow(r, 'r');
   const dV    = (vK !== null && vR !== null) ? (vK - vR) : null;
   const dSort = (r.kSort && r.rSort && r.kSort !== r.rSort);
 
@@ -943,20 +1012,28 @@ function makeCard(r, num) {
       </div>
     </div>
     <div class="input-row">
-      <div class="field-group">
+      <div class="field-group" id="fg-kPrec-${r.id}"${isOgrCijepani(r.kSort)?' style="display:none"':''}>
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.kPrec)}" data-id="${r.id}" data-field="kPrec" inputmode="decimal" min="0" step="1" placeholder="0">
       </div>
+      <div class="field-group" id="fg-kSloz-${r.id}"${!isOgrCijepani(r.kSort)?' style="display:none"':''}>
+        <label>Dim. složaja Š×V (m)</label>
+        <input type="text" value="${esc(r.kSlozDim||'')}" data-id="${r.id}" data-field="kSlozDim" placeholder="npr. 0.8×1.4" autocomplete="off">
+      </div>
       <div class="field-group">
-        <label>Dužina (m)</label>
+        <label id="lbl-kDuz-${r.id}">${isOgrCijepani(r.kSort)?'Dužina složaja (m)':'Dužina (m)'}</label>
         <input type="number" value="${esc(r.kDuz)}" data-id="${r.id}" data-field="kDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
-        ${makeSortSelectHTML(r.kSort, r.id, 'kSort')}
+        ${makeSortSelectHTML(r.kSort, r.id, 'kSort', r.vrsta)}
       </div>
+    </div>
+    <div class="vol-display">
+      <span class="vol-display-label">Zapremina K${isOgrCijepani(r.kSort)?' (složajni m³)':' – Huber (m³)'}</span>
+      <span class="vol-display-value" id="vol-k-${r.id}">${vK !== null ? vK.toFixed(2)+' m³' : '—'}</span>
     </div>
     <div class="input-row single">
       <div class="field-group">
@@ -970,20 +1047,28 @@ function makeCard(r, num) {
   body.innerHTML += `<div class="data-section">
     <span class="section-label sl-redovni">Redovni premjer</span>
     <div class="input-row">
-      <div class="field-group">
+      <div class="field-group" id="fg-rPrec-${r.id}"${isOgrCijepani(r.rSort)?' style="display:none"':''}>
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.rPrec)}" data-id="${r.id}" data-field="rPrec" inputmode="decimal" min="0" step="1" placeholder="0">
       </div>
+      <div class="field-group" id="fg-rSloz-${r.id}"${!isOgrCijepani(r.rSort)?' style="display:none"':''}>
+        <label>Dim. složaja Š×V (m)</label>
+        <input type="text" value="${esc(r.rSlozDim||'')}" data-id="${r.id}" data-field="rSlozDim" placeholder="npr. 0.8×1.4" autocomplete="off">
+      </div>
       <div class="field-group">
-        <label>Dužina (m)</label>
+        <label id="lbl-rDuz-${r.id}">${isOgrCijepani(r.rSort)?'Dužina složaja (m)':'Dužina (m)'}</label>
         <input type="number" value="${esc(r.rDuz)}" data-id="${r.id}" data-field="rDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
-        ${makeSortSelectHTML(r.rSort, r.id, 'rSort')}
+        ${makeSortSelectHTML(r.rSort, r.id, 'rSort', r.vrsta)}
       </div>
+    </div>
+    <div class="vol-display redovni">
+      <span class="vol-display-label">Zapremina R${isOgrCijepani(r.rSort)?' (složajni m³)':' – Huber (m³)'}</span>
+      <span class="vol-display-value" id="vol-r-${r.id}">${vR !== null ? vR.toFixed(2)+' m³' : '—'}</span>
     </div>
   </div>`;
 
@@ -1039,9 +1124,10 @@ function makeSelectHTML(options, val, id, field) {
   return `<select data-id="${id}" data-field="${field}"><option value="">— odaberi —</option>${opts}</select>`;
 }
 
-function makeSortSelectHTML(val, id, field) {
-  const opts = SORTIMENTI.map(v =>
-    `<option value="${v}"${v===val?' selected':''}>${v||'—'}</option>`
+function makeSortSelectHTML(val, id, field, vrsta) {
+  const sortimenti = getSortimenti(vrsta);
+  const opts = sortimenti.map(v =>
+    `<option value="${v}"${v===val?' selected':''}>${v}</option>`
   ).join('');
   return `<select data-id="${id}" data-field="${field}"><option value="">— odaberi —</option>${opts}</select>`;
 }
@@ -1062,10 +1148,54 @@ function onInputChange(e) {
   const r = rows.find(x => x.id === id);
   if (!r) return;
   r[field] = e.target.value;
+
+  if (field === 'vrsta') {
+    lastVrsta = r.vrsta;
+    updateSortOptions(id, r.vrsta);
+  }
+  if (field === 'kSort') updateSlozajVisibility(id, 'k', r.kSort);
+  if (field === 'rSort') updateSlozajVisibility(id, 'r', r.rSort);
+
+  updateVolDisplay(id);
   updateCardDiffs(r);
   updateCardHeader(r);
   updateStats();
   autoSave();
+}
+
+function updateSortOptions(rowId, vrsta) {
+  const sortimenti = getSortimenti(vrsta);
+  ['kSort','rSort'].forEach(field => {
+    const r = rows.find(x => x.id === rowId);
+    const sel = document.querySelector(`select[data-id="${rowId}"][data-field="${field}"]`);
+    if (!sel) return;
+    const cur = sel.value;
+    const opts = sortimenti.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+    sel.innerHTML = `<option value="">— odaberi —</option>${opts}`;
+    if (!sortimenti.includes(cur)) { sel.value = ''; if (r) r[field] = ''; }
+    updateSlozajVisibility(rowId, field === 'kSort' ? 'k' : 'r', sel.value);
+  });
+}
+
+function updateSlozajVisibility(rowId, prefix, sort) {
+  const isSloz = sort === 'OGR.CIJEPANI';
+  const precEl = document.getElementById(`fg-${prefix}Prec-${rowId}`);
+  const slozEl = document.getElementById(`fg-${prefix}Sloz-${rowId}`);
+  const lblEl  = document.getElementById(`lbl-${prefix}Duz-${rowId}`);
+  if (precEl) precEl.style.display = isSloz ? 'none' : '';
+  if (slozEl) slozEl.style.display = isSloz ? '' : 'none';
+  if (lblEl)  lblEl.textContent = isSloz ? 'Dužina složaja (m)' : 'Dužina (m)';
+}
+
+function updateVolDisplay(rowId) {
+  const r = rows.find(x => x.id === rowId);
+  if (!r) return;
+  const vK = calcVRow(r, 'k');
+  const vR = calcVRow(r, 'r');
+  const vkEl = document.getElementById(`vol-k-${rowId}`);
+  const vrEl = document.getElementById(`vol-r-${rowId}`);
+  if (vkEl) vkEl.textContent = vK !== null ? vK.toFixed(2) + ' m³' : '—';
+  if (vrEl) vrEl.textContent = vR !== null ? vR.toFixed(2) + ' m³' : '—';
 }
 
 function updateCardDiffs(r) {
@@ -1073,8 +1203,8 @@ function updateCardDiffs(r) {
   if (!el) return;
   const dPrec = calcDiff(r.kPrec, r.rPrec);
   const dDuz  = calcDiff(r.kDuz, r.rDuz);
-  const vK    = calcV(r.kPrec, r.kDuz);
-  const vR    = calcV(r.rPrec, r.rDuz);
+  const vK    = calcVRow(r, 'k');
+  const vR    = calcVRow(r, 'r');
   const dV    = (vK !== null && vR !== null) ? (vK - vR) : null;
   const dSort = r.kSort && r.rSort && r.kSort !== r.rSort;
   const dvStr = dV !== null ? ((dV>=0?'+':'')+dV.toFixed(2)) : '—';
@@ -1119,7 +1249,7 @@ function updateStats() {
     if (dp !== null && Math.abs(dp) > 0.001) diffPrec++;
     if (dd !== null && Math.abs(dd) > 0.001) diffDuz++;
     if (r.kSort && r.rSort && r.kSort !== r.rSort) diffKlas++;
-    const vk = calcV(r.kPrec, r.kDuz), vr = calcV(r.rPrec, r.rDuz);
+    const vk = calcVRow(r, 'k'), vr = calcVRow(r, 'r');
     if (vk !== null) totalVK += vk;
     if (vr !== null) totalVR += vr;
   });
@@ -1148,6 +1278,40 @@ function updateStats() {
 // ══════════════════════════════════════════
 //  HELPER FUNKCIJE
 // ══════════════════════════════════════════
+
+function getSortimenti(vrsta) {
+  if (VRSTE_LISCARI.includes(vrsta))  return SORTIMENTI_LISCARI;
+  if (VRSTE_CETINARI.includes(vrsta)) return SORTIMENTI_CETINARI;
+  const merged = [...SORTIMENTI_LISCARI];
+  SORTIMENTI_CETINARI.forEach(s => { if (!merged.includes(s)) merged.push(s); });
+  return merged;
+}
+
+function isOgrCijepani(sort) { return sort === 'OGR.CIJEPANI'; }
+
+function parseSlozDim(dimStr) {
+  if (!dimStr) return null;
+  const parts = String(dimStr).replace(',','.').replace('×','x').toLowerCase().split('x');
+  if (parts.length !== 2) return null;
+  const w = parseFloat(parts[0]), h = parseFloat(parts[1]);
+  if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0) return null;
+  return { w, h };
+}
+
+function calcVSloz(dimStr, duz) {
+  const dim = parseSlozDim(dimStr);
+  const d = parseFloat(duz);
+  if (!dim || isNaN(d) || d <= 0) return null;
+  return dim.w * dim.h * d;
+}
+
+function calcVRow(r, type) {
+  if (type === 'k') {
+    return isOgrCijepani(r.kSort) ? calcVSloz(r.kSlozDim, r.kDuz) : calcV(r.kPrec, r.kDuz);
+  }
+  return isOgrCijepani(r.rSort) ? calcVSloz(r.rSlozDim, r.rDuz) : calcV(r.rPrec, r.rDuz);
+}
+
 // Prosta Huberova formula: V = (π/4) × d² × L  (d u metrima, L u metrima)
 function calcV(prec, duz) {
   const p = parseFloat(prec), d = parseFloat(duz);
@@ -1240,6 +1404,101 @@ function deleteFoto(idx) {
 function otvoriMeni()  { otvoriModal('modal-meni'); }
 function otvoriUvoz()  { otvoriModal('modal-uvoz'); }
 function otvoriModal(id) { document.getElementById(id).classList.add('open'); }
+
+// ══════════════════════════════════════════
+//  REKAP KONTROLE
+// ══════════════════════════════════════════
+function otvoriRekap() {
+  const meta = getMeta();
+  const el = document.getElementById('rekap-sadrzaj');
+
+  if (rows.length === 0) {
+    el.innerHTML = '<p style="text-align:center;color:var(--g5);padding:24px 0">Nema zapisa za prikaz.</p>';
+    otvoriModal('modal-rekap');
+    return;
+  }
+
+  // Grupiši po vrsta + kSort (sortiment kontrolnog premjera)
+  const grupe = {};
+  rows.forEach(r => {
+    const vrsta = r.vrsta || '—';
+    const sort  = r.kSort || r.rSort || '—';
+    const key   = vrsta + '||' + sort;
+    if (!grupe[key]) grupe[key] = { vrsta, sort, kom: 0, vK: 0, vR: 0, diffKom: 0 };
+    const g = grupe[key];
+    g.kom++;
+    const vK = calcVRow(r, 'k'), vR = calcVRow(r, 'r');
+    if (vK !== null) g.vK += vK;
+    if (vR !== null) g.vR += vR;
+    if (rowHasDiff(r)) g.diffKom++;
+  });
+
+  const sortirane = Object.values(grupe).sort((a, b) =>
+    a.vrsta.localeCompare(b.vrsta, 'bs') || a.sort.localeCompare(b.sort, 'bs')
+  );
+
+  let totKom = 0, totVK = 0, totVR = 0, totDiffKom = 0;
+  sortirane.forEach(g => { totKom += g.kom; totVK += g.vK; totVR += g.vR; totDiffKom += g.diffKom; });
+
+  const fmtV = v => v.toFixed(2);
+  const fmtD = (dv, vr) => {
+    const s = (dv >= 0 ? '+' : '') + dv.toFixed(2);
+    const pct = vr > 0 ? ((dv / vr) * 100).toFixed(1) : null;
+    return s + (pct !== null ? ' (' + (dv >= 0 ? '+' : '') + pct + '%)' : '');
+  };
+  const clsD = dv => Math.abs(dv) < 0.001 ? 'color:var(--g5)' : (dv > 0 ? 'color:var(--red);font-weight:700' : 'color:var(--blue);font-weight:700');
+
+  let redovi = '';
+  sortirane.forEach(g => {
+    const dv = g.vK - g.vR;
+    redovi += `<tr>
+      <td>${esc(g.vrsta)}</td>
+      <td>${esc(g.sort)}</td>
+      <td>${g.kom}</td>
+      <td>${fmtV(g.vK)}</td>
+      <td>${fmtV(g.vR)}</td>
+      <td style="${clsD(dv)}">${fmtD(dv, g.vR)}</td>
+      <td style="${g.diffKom > 0 ? 'color:var(--red);font-weight:700' : 'color:var(--g5)'}">${g.diffKom || '—'}</td>
+    </tr>`;
+  });
+
+  const totDv = totVK - totVR;
+  el.innerHTML = `
+    <div class="rekap-meta">
+      Primač: <strong>${esc(meta.primka || '—')}</strong> &nbsp;·&nbsp;
+      Odjel: <strong>${esc(meta.odjel || '—')}</strong> &nbsp;·&nbsp;
+      Datum: <strong>${esc(meta.datum || '—')}</strong> &nbsp;·&nbsp;
+      Kontrolant: <strong>${esc(meta.kontrolor || '—')}</strong>
+    </div>
+    <div class="rekap-wrap">
+      <table class="rekap-table">
+        <thead>
+          <tr>
+            <th>Vrsta drveta</th>
+            <th>Sortiment</th>
+            <th>Kom.</th>
+            <th>V Kontr. (m³)</th>
+            <th>V Redn. (m³)</th>
+            <th>Razlika (m³ / %)</th>
+            <th>Razl. kom.</th>
+          </tr>
+        </thead>
+        <tbody>${redovi}</tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">UKUPNO</td>
+            <td>${totKom}</td>
+            <td>${fmtV(totVK)}</td>
+            <td>${fmtV(totVR)}</td>
+            <td style="${clsD(totDv)}">${fmtD(totDv, totVR)}</td>
+            <td style="${totDiffKom > 0 ? 'color:var(--red)' : 'color:var(--g5)'}">${totDiffKom || '—'}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+
+  otvoriModal('modal-rekap');
+}
 function zatvoriModal(id) { document.getElementById(id).classList.remove('open'); }
 
 // ══════════════════════════════════════════
@@ -1333,12 +1592,12 @@ function exportWord() {
   if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
 
   const MIN_ROWS = 20;
-  const fmtV = v => v !== null ? v.toFixed(3) : '';
+  const fmtV = v => v !== null ? v.toFixed(2) : '';
   const fmtD = v => v ? parseFloat(v).toFixed(2) : '';
 
   const dataRows = rows.map(r => {
-    const vR = calcV(r.rPrec, r.rDuz);
-    const vK = calcV(r.kPrec, r.kDuz);
+    const vR = calcVRow(r, 'r');
+    const vK = calcVRow(r, 'k');
     const hasDiff = rowHasDiff(r);
     const bg = hasDiff ? ' bgcolor="#FFE8E8"' : '';
     return `<tr${bg}>
@@ -1542,7 +1801,7 @@ function exportCSV() {
   csv += `Kontrola sječe šumskih sortimenata\nOdjel;${meta.odjel}\nDatum;${meta.datum}\nKontrolante;${meta.kontrolor}\nPrimač;${meta.primka}\n\n`;
   csv += 'R.br.;Vrsta;Pločica;K.Prečnik(cm);K.Dužina(m);K.Sortiment;Napomena;R.Prečnik(cm);R.Dužina(m);R.Sortiment;Δ.Prečnik;Δ.Dužina;Δ.Zap(m3);Δ.Sortiment\n';
   rows.forEach((r,i) => {
-    const vK=calcV(r.kPrec,r.kDuz), vR=calcV(r.rPrec,r.rDuz);
+    const vK=calcVRow(r,'k'), vR=calcVRow(r,'r');
     const dV = (vK!==null&&vR!==null)?((vK-vR>=0?'+':'')+(vK-vR).toFixed(2)):'—';
     csv += [i+1,r.vrsta,r.ploc,r.kPrec,r.kDuz,r.kSort,r.nap,r.rPrec,r.rDuz,r.rSort,
             formatDiff(calcDiff(r.kPrec,r.rPrec)),formatDiff(calcDiff(r.kDuz,r.rDuz)),dV,
@@ -1589,7 +1848,7 @@ async function exportPDF() {
       if (dp!==null&&Math.abs(dp)>0.001) diffPrec++;
       if (dd!==null&&Math.abs(dd)>0.001) diffDuz++;
       if (r.kSort&&r.rSort&&r.kSort!==r.rSort) diffKlas++;
-      const vk=calcV(r.kPrec,r.kDuz), vr=calcV(r.rPrec,r.rDuz);
+      const vk=calcVRow(r,'k'), vr=calcVRow(r,'r');
       if (vk!==null) totalVK+=vk;
       if (vr!==null) totalVR+=vr;
     });
@@ -1639,9 +1898,9 @@ async function exportPDF() {
       {lab:'RAZLIKE PRECNIK',val:String(diffPrec),                                cr:diffPrec>0},
       {lab:'RAZLIKE DUZINA', val:String(diffDuz),                                 cr:diffDuz>0},
       {lab:'RAZLIKE KLASA',  val:String(diffKlas),                                cr:diffKlas>0},
-      {lab:'ZAP. KONTR. m3', val:totalVK.toFixed(3),                              cr:false},
-      {lab:'ZAP. REDN. m3',  val:totalVR.toFixed(3),                              cr:false},
-      {lab:'DELTA ZAP. m3',  val:(dV0>=0?'+':'')+dV0.toFixed(3),                 cr:Math.abs(dV0)>0.001},
+      {lab:'ZAP. KONTR. m3', val:totalVK.toFixed(2),                              cr:false},
+      {lab:'ZAP. REDN. m3',  val:totalVR.toFixed(2),                              cr:false},
+      {lab:'DELTA ZAP. m3',  val:(dV0>=0?'+':'')+dV0.toFixed(2),                 cr:Math.abs(dV0)>0.001},
     ];
     const spw = CW / statPolja.length;
     statPolja.forEach(({lab,val,cr}, i) => {
@@ -1738,12 +1997,12 @@ async function exportPDF() {
       const hd     = rowHasDiff(r);
       const dPrec  = calcDiff(r.kPrec, r.rPrec);
       const dDuz   = calcDiff(r.kDuz,  r.rDuz);
-      const vK     = calcV(r.kPrec, r.kDuz);
-      const vR     = calcV(r.rPrec, r.rDuz);
+      const vK     = calcVRow(r, 'k');
+      const vR     = calcVRow(r, 'r');
       const dVrow  = (vK!==null&&vR!==null) ? (vK-vR) : null;
       const dSort  = (r.kSort&&r.rSort&&r.kSort!==r.rSort)
                      ? r.kSort.substring(0,7)+'->'+r.rSort.substring(0,7) : '';
-      const dvStr  = dVrow!==null ? (dVrow>=0?'+':'')+dVrow.toFixed(3) : '-';
+      const dvStr  = dVrow!==null ? (dVrow>=0?'+':'')+dVrow.toFixed(2) : '-';
 
       // Pozadina
       if (hd) { doc.setFillColor(255,241,240); }
