@@ -160,6 +160,13 @@ body {
   border-radius: 8px; font-size: 13px; background: var(--g1);
   color: var(--g7); max-width: 140px;
 }
+.filter-btn {
+  padding: 7px 10px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-size: 13px; background: var(--g1);
+  color: var(--gm); font-weight: 600; cursor: pointer; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-btn:active { background: var(--gp); border-color: var(--gl); }
 
 /* ══ FAB (Floating Add Button) ══ */
 .fab {
@@ -231,6 +238,39 @@ body {
 .sl-kontrolni { background: #e8f4fd; color: #1565c0; }
 .sl-redovni { background: var(--gp); color: var(--gm); }
 .sl-razlike { background: #fef4e8; color: #b45309; }
+
+/* ══ SKLOPIVA SEKCIJA (redovni premjer) ══ */
+.sec-sklopiva {
+  border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; margin-top: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sec-sklopiva.otvorena { border-color: var(--gl); background: #fbfefc; }
+.sec-glava {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  min-height: 34px;
+}
+.sec-glava .section-label { margin-bottom: 0; flex-shrink: 0; }
+.sec-sazetak {
+  flex: 1; min-width: 0; text-align: right;
+  font-size: 12px; color: var(--g5);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sec-sazetak.popunjen { color: var(--gm); font-weight: 700; }
+.sec-strelica {
+  flex-shrink: 0; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gm); font-size: 20px; line-height: 1;
+  border-radius: 50%; background: var(--g1);
+  transition: transform 0.2s ease, background 0.15s;
+}
+.sec-sklopiva.otvorena .sec-strelica { transform: rotate(90deg); background: var(--gp); }
+.sec-tijelo { display: none; padding-top: 10px; }
+.sec-sklopiva.otvorena .sec-tijelo { display: block; }
+/* Razlike nemaju smisla dok redovni premjer nije unesen */
+.sec-razlike.prazna { display: none; }
 
 .input-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;
@@ -511,6 +551,10 @@ body {
   .stablo-card.ok       { border-left-color: #52b788 !important; }
   .card-body { display: block !important; }
   .card-chevron { display: none !important; }
+  /* Sklopljeni redovni premjer se pri štampi mora vidjeti */
+  .sec-tijelo   { display: block !important; padding-top: 4px; }
+  .sec-strelica, .sec-sazetak { display: none !important; }
+  .sec-sklopiva { border: none; padding: 0; background: none !important; }
   .data-section { margin-top: 8px; }
   .input-row { gap: 4px; margin-bottom: 4px; }
   .field-group { gap: 1px; }
@@ -760,6 +804,7 @@ body {
       <option value="diff">S razlikama</option>
       <option value="ok">Bez razlika</option>
     </select>
+    <button class="filter-btn" onclick="toggleSviRedovni()" title="Otvori/sklopi redovni premjer na svim zapisima">↕ Redovni</button>
   </div>
   <span style="font-size:12px;color:var(--g5);" id="filter-count"></span>
 </div>
@@ -1033,6 +1078,9 @@ function addRow(data) {
     rSlozDim: data?.rSlozDim || '',
     photos:   data?.photos   || [],
     expanded: true,
+    // Redovni premjer je sklopljen: na terenu se unosi samo kontrolni,
+    // a redovni se dopunjava kasnije u kancelariji.
+    rOpen:    data?.rOpen    || false,
   };
   rows.push(r);
   renderLista(); updateStats(); autoSave(); updateMetaBarVisibility();
@@ -1105,12 +1153,7 @@ function makeCard(r, num) {
       <div class="card-num">${num}</div>
       <div>
         <div class="card-title">${r.vrsta || '<span style="color:var(--g5);font-weight:400;font-style:italic">Vrsta nije odabrana</span>'}</div>
-        <div class="card-sub">
-          Pločica: ${r.ploc || '—'} &nbsp;·&nbsp;
-          K: ${r.kPrec ? r.kPrec+'cm / '+parseFloat(r.kDuz||0).toFixed(2)+'m' : '—'} &nbsp;·&nbsp;
-          R: ${r.rPrec ? r.rPrec+'cm / '+parseFloat(r.rDuz||0).toFixed(2)+'m' : '—'}
-          ${r.photos.length > 0 ? `&nbsp;·&nbsp; 📷${r.photos.length}` : ''}
-        </div>
+        <div class="card-sub">${sazetakZaglavlja(r)}</div>
       </div>
     </div>
     <div class="card-header-right">
@@ -1176,9 +1219,15 @@ function makeCard(r, num) {
     </div>
   </div>`;
 
-  // ── Redovni premjer ──
-  body.innerHTML += `<div class="data-section">
-    <span class="section-label sl-redovni">${TIP_UI[activeTip].rSekcija}</span>
+  // ── Redovni premjer (sklopivo: na terenu se unosi samo kontrolni) ──
+  const rIma = imaPodatke(r, 'r');
+  body.innerHTML += `<div class="data-section sec-sklopiva${r.rOpen ? ' otvorena' : ''}" id="sec-r-${r.id}">
+    <div class="sec-glava" onclick="toggleRedovni(${r.id})">
+      <span class="section-label sl-redovni">${TIP_UI[activeTip].rSekcija}</span>
+      <span class="sec-sazetak${rIma ? ' popunjen' : ''}" id="sec-r-sum-${r.id}">${kratkiPregled(r, 'r')}</span>
+      <span class="sec-strelica">›</span>
+    </div>
+    <div class="sec-tijelo">
     <div class="input-row">
       <div class="field-group" id="fg-rPrec-${r.id}"${isOgrCijepani(r.rSort)?' style="display:none"':''}>
         <label>Prečnik (cm)</label>
@@ -1207,11 +1256,12 @@ function makeCard(r, num) {
       <span class="vol-display-label">Zapremina R${isOgrCijepani(r.rSort)?' (složajni m³)':' – Huber (m³)'}</span>
       <span class="vol-display-value" id="vol-r-${r.id}">${vR !== null ? vR.toFixed(2)+' m³' : '—'}</span>
     </div>
+    </div>
   </div>`;
 
   // ── Razlike ──
   const dvStr = dV !== null ? ((dV >= 0 ? '+' : '') + dV.toFixed(2)) : '—';
-  body.innerHTML += `<div class="data-section">
+  body.innerHTML += `<div class="data-section sec-razlike${rIma ? '' : ' prazna'}" id="raz-${r.id}">
     <span class="section-label sl-razlike">Razlike</span>
     <div class="diff-row" id="diffs-${r.id}">
       <div class="diff-box">
@@ -1271,6 +1321,24 @@ function makeSortSelectHTML(val, id, field, vrsta) {
 
 function esc(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
+// Sklapanje/rasklapanje redovnog premjera. Ne radimo renderLista() da se
+// ne izgubi fokus i pozicija skrola dok korisnik unosi podatke.
+function toggleRedovni(id) {
+  const r = rows.find(x => x.id === id);
+  if (!r) return;
+  r.rOpen = !r.rOpen;
+  const sec = document.getElementById('sec-r-' + id);
+  if (sec) sec.classList.toggle('otvorena', r.rOpen);
+  autoSave();
+}
+
+function toggleSviRedovni() {
+  const trebaOtvoriti = !rows.every(r => r.rOpen);
+  rows.forEach(r => { r.rOpen = trebaOtvoriti; });
+  renderLista(); autoSave();
+  showToast(trebaOtvoriti ? 'Redovni premjer otvoren' : 'Redovni premjer sklopljen');
+}
+
 function toggleCard(id) {
   const r = rows.find(x => x.id === id);
   if (r) { r.expanded = !r.expanded; renderLista(); }
@@ -1296,10 +1364,23 @@ function onInputChange(e) {
   if (field === 'rSort') updateSlozajVisibility(id, 'r', r.rSort);
 
   updateVolDisplay(id);
+  updateSekcijaR(r);
   updateCardDiffs(r);
   updateCardHeader(r);
   updateStats();
   autoSave();
+}
+
+// Osvježi sažetak sklopljenog redovnog premjera i vidljivost Razlika
+function updateSekcijaR(r) {
+  const ima = imaPodatke(r, 'r');
+  const sum = document.getElementById('sec-r-sum-' + r.id);
+  if (sum) {
+    sum.textContent = kratkiPregled(r, 'r');
+    sum.classList.toggle('popunjen', ima);
+  }
+  const raz = document.getElementById('raz-' + r.id);
+  if (raz) raz.classList.toggle('prazna', !ima);
 }
 
 function updateSortOptions(rowId, vrsta) {
@@ -1364,15 +1445,22 @@ function updateCardDiffs(r) {
   }
 }
 
+// Sažetak ispod naziva vrste: pločica, K i R strana, broj fotografija.
+// Koristi kratkiPregled da se i složajni redovi vide (imaju dimenzije
+// složaja umjesto prečnika).
+function sazetakZaglavlja(r) {
+  const dio = (oznaka, tip) => imaPodatke(r, tip)
+    ? `<b>${oznaka}:</b> ${esc(kratkiPregled(r, tip))}`
+    : `<span style="color:var(--g3)">${oznaka}: —</span>`;
+  const foto = (r.photos && r.photos.length > 0) ? ` &nbsp;·&nbsp; 📷${r.photos.length}` : '';
+  return `Pločica: ${esc(r.ploc) || '—'} &nbsp;·&nbsp; ${dio('K','k')} &nbsp;·&nbsp; ${dio('R','r')}${foto}`;
+}
+
 function updateCardHeader(r) {
   const card = document.getElementById('card-' + r.id);
   if (!card) return;
   const sub = card.querySelector('.card-sub');
-  if (sub) sub.innerHTML = `
-    Pločica: ${r.ploc||'—'} &nbsp;·&nbsp;
-    K: ${r.kPrec ? r.kPrec+'cm / '+parseFloat(r.kDuz||0).toFixed(2)+'m' : '—'} &nbsp;·&nbsp;
-    R: ${r.rPrec ? r.rPrec+'cm / '+parseFloat(r.rDuz||0).toFixed(2)+'m' : '—'}
-    ${r.photos&&r.photos.length>0?`&nbsp;·&nbsp; 📷${r.photos.length}`:''}`;
+  if (sub) sub.innerHTML = sazetakZaglavlja(r);
   const title = card.querySelector('.card-title');
   if (title) title.innerHTML = r.vrsta || '<span style="color:var(--g5);font-weight:400;font-style:italic">Vrsta nije odabrana</span>';
   const dot = card.querySelector('.diff-dot');
@@ -1383,18 +1471,19 @@ function updateCardHeader(r) {
 //  STATISTIKE
 // ══════════════════════════════════════════
 function updateStats() {
-  let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0;
+  let diffPrec=0, diffDuz=0, diffKlas=0, diffSloz=0, totalVK=0, totalVR=0;
   rows.forEach(r => {
     const dp = calcDiff(r.kPrec, r.rPrec);
     const dd = calcDiff(r.kDuz, r.rDuz);
     if (dp !== null && Math.abs(dp) > 0.001) diffPrec++;
     if (dd !== null && Math.abs(dd) > 0.001) diffDuz++;
     if (r.kSort && r.rSort && r.kSort !== r.rSort) diffKlas++;
+    if (slozDimRazlika(r)) diffSloz++;
     const vk = calcVRow(r, 'k'), vr = calcVRow(r, 'r');
     if (vk !== null) totalVK += vk;
     if (vr !== null) totalVR += vr;
   });
-  const totalDiff = diffPrec + diffDuz + diffKlas;
+  const totalDiff = diffPrec + diffDuz + diffKlas + diffSloz;
 
   document.getElementById('stat-ukupno').textContent = rows.length;
   document.getElementById('stat-prec').textContent   = diffPrec;
@@ -1478,7 +1567,38 @@ function rowHasDiff(r) {
   const dd = calcDiff(r.kDuz, r.rDuz);
   return (dp !== null && Math.abs(dp) > 0.001) ||
          (dd !== null && Math.abs(dd) > 0.001) ||
-         (r.kSort && r.rSort && r.kSort !== r.rSort);
+         (r.kSort && r.rSort && r.kSort !== r.rSort) ||
+         slozDimRazlika(r);
+}
+
+// Složajni redovi nemaju prečnik, pa se razlika vidi samo kroz dimenzije
+// složaja – bez ovoga bi red sa 0.8×1.4 naspram 1.0×1.4 bio "bez razlika".
+function slozDimRazlika(r) {
+  if (!isOgrCijepani(r.kSort) && !isOgrCijepani(r.rSort)) return false;
+  const a = parseSlozDim(r.kSlozDim), b = parseSlozDim(r.rSlozDim);
+  if (!a || !b) return false;
+  return Math.abs(a.w * a.h - b.w * b.h) > 0.0001;
+}
+
+// Ima li strana (k/r) uopšte unesenih podataka
+function imaPodatke(r, tip) {
+  return tip === 'k'
+    ? !!(r.kPrec || r.kDuz || r.kSort || r.kSlozDim)
+    : !!(r.rPrec || r.rDuz || r.rSort || r.rSlozDim);
+}
+
+// Kratak pregled jedne strane za sklopljeni prikaz i zaglavlje kartice
+function kratkiPregled(r, tip) {
+  const sort = tip === 'k' ? r.kSort : r.rSort;
+  const prec = tip === 'k' ? r.kPrec : r.rPrec;
+  const duz  = tip === 'k' ? r.kDuz  : r.rDuz;
+  const dim  = tip === 'k' ? r.kSlozDim : r.rSlozDim;
+  if (!imaPodatke(r, tip)) return 'nije uneseno';
+  const duzStr = duz ? parseFloat(duz).toFixed(2) + ' m' : '?';
+  const glavni = isOgrCijepani(sort)
+    ? (dim || '?') + ' × ' + duzStr
+    : (prec ? prec + ' cm' : '?') + ' · ' + duzStr;
+  return glavni + (sort ? ' · ' + sort : '');
 }
 
 // ══════════════════════════════════════════
@@ -2015,18 +2135,19 @@ async function exportPDF() {
     const RED = [192,57,43], BLU = [21,101,192];
 
     // Izracunaj statistike
-    let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0, skippedPhotos=0;
+    let diffPrec=0, diffDuz=0, diffKlas=0, diffSloz=0, totalVK=0, totalVR=0, skippedPhotos=0;
     rows.forEach(r => {
       const dp=calcDiff(r.kPrec,r.rPrec), dd=calcDiff(r.kDuz,r.rDuz);
       if (dp!==null&&Math.abs(dp)>0.001) diffPrec++;
       if (dd!==null&&Math.abs(dd)>0.001) diffDuz++;
       if (r.kSort&&r.rSort&&r.kSort!==r.rSort) diffKlas++;
+      if (slozDimRazlika(r)) diffSloz++;
       const vk=calcVRow(r,'k'), vr=calcVRow(r,'r');
       if (vk!==null) totalVK+=vk;
       if (vr!==null) totalVR+=vr;
     });
     const dV0 = totalVK - totalVR;
-    const ukDiff = diffPrec + diffDuz + diffKlas;
+    const ukDiff = diffPrec + diffDuz + diffKlas + diffSloz;
 
     // ── ZAGLAVLJE ────────────────────────────────────────────────────
     const jeOtprema = activeTip === 'otprema';
@@ -2384,7 +2505,9 @@ function openKontrola(id) {
   if (!k) return;
   activeId = id;
   activeTip = k.tip || 'sjeca';
-  rows = k.rows.map(r => ({...r}));
+  // photos može nedostajati kod starijih sačuvanih kontrola – bez ovoga
+  // renderovanje kartica puca na r.photos.length
+  rows = (k.rows || []).map(r => ({...r, photos: r.photos || []}));
   idCnt = k.idCnt || 0;
   applyTipUI(activeTip);
   setMeta(k.meta);
