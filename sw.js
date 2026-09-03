@@ -1,4 +1,4 @@
-const CACHE = 'kp-v6';
+const CACHE = 'kp-v8';
 
 // Svi fajlovi se isporučuju uz app (nema više eksternog CDN-a) – moraju
 // se uspješno keširati da bi app radio 100% offline, od prvog otvaranja.
