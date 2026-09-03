@@ -394,6 +394,7 @@ body {
 .mi-blue  { background: var(--blue-p); }
 .mi-amber { background: #fff8e1; }
 .mi-red   { background: var(--red-p); }
+.mi-purple { background: #f1e8fd; }
 
 /* ══ FOTO MODAL ══ */
 .photo-upload-zone {
@@ -876,7 +877,14 @@ body {
       <div class="menu-icon mi-red">📄</div>
       <div>
         <div>Generiraj PDF izvještaj</div>
-        <div style="font-size:12px;color:var(--g5);">Uključuje podatke i fotografije</div>
+        <div style="font-size:12px;color:var(--g5);">Tabelarni pregled + fotografije na kraju</div>
+      </div>
+    </div>
+    <div class="menu-item" onclick="exportPDFDetaljno();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-purple">🖼️</div>
+      <div>
+        <div>Detaljan izvještaj sa slikama</div>
+        <div style="font-size:12px;color:var(--g5);">Svaki komad zasebno, s velikim fotografijama</div>
       </div>
     </div>
     <div class="menu-item" onclick="otvoriUvoz();zatvoriModal('modal-meni')">
@@ -947,7 +955,7 @@ body {
 <!-- ══ PDF OVERLAY ══ -->
 <div class="pdf-overlay" id="pdf-overlay">
   <div class="pdf-spinner"></div>
-  <p>Generiranje PDF-a...</p>
+  <p id="pdf-overlay-tekst">Generiranje PDF-a...</p>
 </div>
 
 <script>
@@ -2431,6 +2439,219 @@ async function exportPDF() {
     document.getElementById('pdf-overlay').classList.remove('open');
   }
 }
+
+// ══════════════════════════════════════════
+//  EXPORT PDF – DETALJAN (svaki komad zasebno, s velikim fotografijama)
+// ══════════════════════════════════════════
+async function exportPDFDetaljno() {
+  if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
+  if (!window.jspdf) {
+    try {
+      await loadScript('./vendor/jspdf.umd.min.js');
+    } catch(e) { alert('Nije moguce ucitati PDF biblioteku.'); return; }
+  }
+
+  const overlayTxt = document.getElementById('pdf-overlay-tekst');
+  if (overlayTxt) overlayTxt.textContent = 'Generiranje detaljnog izvještaja...';
+  document.getElementById('pdf-overlay').classList.add('open');
+  await new Promise(r => setTimeout(r, 120));
+
+  try {
+    const { jsPDF } = window.jspdf;
+    // A4 uspravno – jedan komad ispod drugog, s prostorom za velike slike
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const meta = getMeta();
+    const W = 210, H = 297, mg = 12;
+    const CW = W - mg * 2;
+    let skippedPhotos = 0;
+
+    const GD=[26,58,42], GM=[45,106,79], GL=[82,183,136], GP=[216,243,220];
+    const G1=[242,242,247], G5=[99,99,102], RED=[192,57,43], BLU=[21,101,192];
+
+    const jeOtprema = activeTip === 'otprema';
+    const labK = jeOtprema ? 'UTVRDJENO KONTROLOM' : 'KONTROLNI PREMJER';
+    const labR = jeOtprema ? 'PREMA OTPREMNICI'    : 'REDOVNI PREMJER';
+
+    // ── NASLOVNA TRAKA ──────────────────────────────────────────────
+    doc.setFillColor(...GD); doc.rect(0,0,W,17,'F');
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('SPD UNSKO SANSKE SUME', mg, 8);
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(160,210,180);
+    doc.text('DETALJAN IZVJESTAJ SA FOTOGRAFIJAMA  ·  ' + (jeOtprema?'KONTROLA OTPREME':'KONTROLA SJECE'), mg, 14);
+
+    // ── META PODACI ─────────────────────────────────────────────────
+    let y = 17;
+    doc.setFillColor(...GM); doc.rect(0,y,W,14,'F');
+    const metaPolja = [
+      ['KONTROLANT', meta.kontrolor||'nije uneseno'],
+      [jeOtprema?'KUPAC':'PRIMAC', meta.primka||'nije uneseno'],
+      ['ODJEL', meta.odjel||'nije uneseno'],
+      ['DATUM', meta.datum||'nije uneseno'],
+    ];
+    if (jeOtprema) metaPolja.push(['BR. OTPREMNICE', meta.brojOtpremnice||'nije uneseno']);
+    const mcw = CW / metaPolja.length;
+    metaPolja.forEach(([lab,val],i) => {
+      const mx = mg + i*mcw;
+      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(160,210,180);
+      doc.text(lab, mx, y+5.5);
+      doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+      doc.text(String(val).substring(0,18), mx, y+11.5);
+    });
+    y += 14;
+
+    // ── SAŽETAK ──────────────────────────────────────────────────────
+    const brojSaFoto = rows.filter(r=>r.photos&&r.photos.length>0).length;
+    const brojSaRazlikom = rows.filter(rowHasDiff).length;
+    doc.setFillColor(...G1); doc.rect(0,y,W,9,'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+    doc.setTextColor(...GD);
+    const sazetakTxt = rows.length+' zapisa  ·  '+brojSaFoto+' sa fotografijama  ·  '+
+      (brojSaRazlikom>0 ? brojSaRazlikom+' sa razlikom' : 'bez razlika');
+    doc.text(sazetakTxt, W/2, y+5.8, {align:'center'});
+    y += 9 + 5;
+
+    // ── FUNKCIJA ZA ISPIS JEDNE STRANE (K ili R) ──────────────────────
+    function crtajStranu(x, w, r, tip, boja) {
+      const sort = tip==='k' ? r.kSort : r.rSort;
+      const prec = tip==='k' ? r.kPrec : r.rPrec;
+      const duz  = tip==='k' ? r.kDuz  : r.rDuz;
+      const dim  = tip==='k' ? r.kSlozDim : r.rSlozDim;
+      const vol  = calcVRow(r, tip);
+      const slozajni = isOgrCijepani(sort);
+      let yy = y;
+      doc.setFontSize(6.3); doc.setFont('helvetica','bold'); doc.setTextColor(...boja);
+      doc.text(tip==='k'?labK:labR, x, yy); yy += 5;
+      doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(35,35,35);
+      // jsPDF-ov osnovni font (WinAnsi) nema č/ć/đ/š/ž – tekst mora biti ASCII
+      const glavniTxt = slozajni
+        ? 'Dim. slozaja: '+(dim||'—')+'   Duzina: '+(duz?parseFloat(duz).toFixed(2)+' m':'—')
+        : 'Precnik: '+(prec||'—')+' cm   Duzina: '+(duz?parseFloat(duz).toFixed(2)+' m':'—');
+      doc.text(glavniTxt, x, yy); yy += 5;
+      doc.text('Sortiment/Klasa: '+(sort||'—'), x, yy); yy += 5.5;
+      doc.setFont('helvetica','bold'); doc.setTextColor(...boja);
+      doc.text('Zapremina: '+(vol!==null?vol.toFixed(2)+' m³':'—')+(slozajni?' (slozajni)':''), x, yy);
+      return yy;
+    }
+
+    // ── STAVKE ──────────────────────────────────────────────────────
+    const PW=87, PH=65, PGAP=4;
+    rows.forEach((r, idx) => {
+      const hd = rowHasDiff(r);
+      const nFoto = (r.photos && r.photos.length) || 0;
+      const nRedFoto = nFoto>0 ? Math.ceil(nFoto/2) : 0;
+      const visFoto = nFoto>0 ? nRedFoto*(PH+PGAP) : 7;
+      const visNap = r.nap ? 6 : 0;
+      const visRaz = hd ? 11 : 0;
+      const ukupnaVis = 9 + 24 + visRaz + visNap + 3 + visFoto + 6;
+
+      // Ne dozvoli da zaglavlje stavke ostane samo na dnu stranice
+      if (y + Math.min(ukupnaVis, 9+24+8) > H-12) { doc.addPage(); y = 12; }
+
+      // Zaglavlje stavke
+      doc.setFillColor(...(hd ? [253,235,233] : GP));
+      doc.rect(mg, y, CW, 9, 'F');
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+      doc.text('#'+(idx+1)+'  '+(r.vrsta||'Vrsta nije odabrana')+(r.ploc?'   ·  Plocica: '+r.ploc:''), mg+3, y+6);
+      doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.setTextColor(...(hd ? RED : GM));
+      doc.text(hd ? 'RAZLIKA' : 'BEZ RAZLIKE', W-mg-3, y+6, {align:'right'});
+      y += 9 + 3;
+
+      // Dvije kolone K / R
+      const colW = (CW - 8) / 2;
+      const yPoK = crtajStranu(mg, colW, r, 'k', BLU);
+      const yPoR = crtajStranu(mg+colW+8, colW, r, 'r', GM);
+      doc.setDrawColor(220,224,220); doc.setLineWidth(0.2);
+      doc.line(mg+colW+4, y, mg+colW+4, Math.max(yPoK,yPoR)+1.5);
+      y = Math.max(yPoK, yPoR) + 4;
+
+      // Razlike (samo ako postoje)
+      if (hd) {
+        const dPrec = calcDiff(r.kPrec, r.rPrec), dDuz = calcDiff(r.kDuz, r.rDuz);
+        const vK = calcVRow(r,'k'), vR = calcVRow(r,'r');
+        const dV = (vK!==null&&vR!==null) ? vK-vR : null;
+        const dSort = (r.kSort && r.rSort && r.kSort!==r.rSort);
+        const dSloz = slozDimRazlika(r);
+        doc.setFillColor(255,248,247); doc.rect(mg,y,CW,8,'F');
+        doc.setDrawColor(...RED); doc.setLineWidth(0.3); doc.line(mg,y,mg,y+8);
+        const stavkeR = [
+          'Precnik: '+formatDiff(dPrec),
+          'Duzina: '+formatDiff(dDuz),
+          'Zapremina: '+(dV!==null?(dV>=0?'+':'')+dV.toFixed(2)+' m³':'—'),
+        ];
+        if (dSort) stavkeR.push('Klasa: '+r.kSort.substring(0,10)+' -> '+r.rSort.substring(0,10));
+        if (dSloz) stavkeR.push('Slozaj: '+(r.kSlozDim||'—')+' -> '+(r.rSlozDim||'—'));
+        doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...RED);
+        doc.text('RAZLIKE:  ' + stavkeR.join('     '), mg+4, y+5);
+        y += 8 + 3;
+      }
+
+      // Napomena
+      if (r.nap) {
+        doc.setFontSize(6.8); doc.setFont('helvetica','italic'); doc.setTextColor(...G5);
+        doc.text('Napomena: '+String(r.nap).substring(0,120), mg, y+3.5);
+        y += 6;
+      }
+      y += 3;
+
+      // Fotografije
+      if (nFoto > 0) {
+        let px = mg;
+        for (let pi=0; pi<r.photos.length; pi++) {
+          if (px+PW > W-mg) { px=mg; y+=PH+PGAP; }
+          if (y+PH > H-12) { doc.addPage(); y=12; px=mg; }
+          try {
+            doc.addImage(r.photos[pi].data, imgFormat(r.photos[pi].data), px, y, PW, PH, undefined, 'MEDIUM');
+            doc.setDrawColor(...GM); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
+          } catch(e) {
+            console.error('addImage failed za '+r.photos[pi].name, e);
+            skippedPhotos++;
+            doc.setDrawColor(...RED); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
+            doc.setFontSize(6.5); doc.setTextColor(...RED);
+            doc.text('Slika nije ucitana', px+PW/2, y+PH/2, {align:'center'});
+          }
+          px += PW+PGAP;
+        }
+        y += PH + 8;
+      } else {
+        doc.setFontSize(7); doc.setFont('helvetica','italic'); doc.setTextColor(...G5);
+        doc.text('Nema fotografija za ovaj zapis.', mg, y+3);
+        y += 8;
+      }
+
+      // Razdjelnik prije sljedeće stavke
+      if (idx < rows.length-1) {
+        doc.setDrawColor(225,228,225); doc.setLineWidth(0.3);
+        doc.line(mg, y, W-mg, y);
+        y += 5;
+      }
+    });
+
+    // ── FOOTER na svim stranicama ─────────────────────────────────────
+    const pCnt = doc.getNumberOfPages();
+    for (let i=1; i<=pCnt; i++) {
+      doc.setPage(i);
+      doc.setFillColor(...G1); doc.rect(0,H-9,W,9,'F');
+      doc.setDrawColor(195,208,200); doc.setLineWidth(0.2); doc.line(mg,H-9,W-mg,H-9);
+      doc.setFontSize(5.8); doc.setFont('helvetica','normal'); doc.setTextColor(120,130,125);
+      const fTxt = 'SPD Unsko-sanske sume  |  Detaljan izvjestaj  |  Odjel: '+(meta.odjel||'-')+
+        '  |  Datum: '+(meta.datum||'-')+'  |  Kontrolant: '+(meta.kontrolor||'-');
+      doc.text(fTxt, mg, H-3.5);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+      doc.text(i+' / '+pCnt, W-mg, H-3.5, {align:'right'});
+    }
+
+    doc.save((jeOtprema?'kontrola_otpreme_':'kontrola_sjece_')+'detaljno_'+(meta.datum||'izvjestaj')+'.pdf');
+    showToast(skippedPhotos>0 ? `Detaljan izvještaj sačuvan (${skippedPhotos} foto nije učitano)` : 'Detaljan izvještaj sačuvan');
+
+  } catch(err) {
+    console.error(err); alert('Greška pri generiranju izvještaja: '+err.message);
+  } finally {
+    document.getElementById('pdf-overlay').classList.remove('open');
+    if (overlayTxt) overlayTxt.textContent = 'Generiranje PDF-a...';
+  }
+}
+
 // ══════════════════════════════════════════
 //  MULTI-KONTROLA
 // ══════════════════════════════════════════
