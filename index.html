@@ -2499,6 +2499,7 @@ function showToast(msg) {
 let deferredPrompt = null;
 let offlineSpremno = false;
 let offlineRazlog  = '';
+let offlinePdf     = false;
 const jeIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
 function jeInstalirana() {
@@ -2555,47 +2556,74 @@ async function provjeriOffline() {
   const chip = document.getElementById('off-chip');
   const txt  = document.getElementById('off-chip-tekst');
   if (!chip || !txt) return;
-  let spremno = false, razlog = '';
+  let spremno = false, imaPdf = false, razlog = '';
   try {
     if (!('serviceWorker' in navigator) || !('caches' in window)) {
       razlog = 'Ovaj preglednik ne podržava offline rad. Otvori aplikaciju u Chrome-u ili Safari-ju.';
     } else {
-      const keys = await caches.keys();
-      const kp   = keys.find(k => k.startsWith('kp-'));
-      if (!kp) {
-        razlog = 'Offline sadržaj se još priprema. Ostani na internetu još par sekundi.';
+      const keys = (await caches.keys()).filter(k => k.startsWith('kp-'));
+      if (keys.length === 0) {
+        razlog = (await navigator.serviceWorker.getRegistration())
+          ? 'Preuzimanje je počelo. Ostani na internetu još par sekundi.'
+          : 'Offline dio se nije pokrenuo. Osvježi stranicu dok imaš internet.';
       } else {
-        const c = await caches.open(kp);
+        // Gledamo SVE kp- keševe, ne samo prvi: pri nadogradnji stari keš
+        // može još postojati i biti nepotpun, pa bi provjera lažno pala.
         const puni = u => new URL(u, location.href).href;
-        const dijelovi = await Promise.all([
-          c.match(puni('./index.html')),
-          c.match(puni('./vendor/jspdf.umd.min.js')),
-        ]);
-        if (dijelovi.every(Boolean)) spremno = true;
-        else razlog = 'Offline sadržaj je nepotpun. Osvježi stranicu dok imaš internet.';
+        for (const k of keys) {
+          const c = await caches.open(k);
+          if (await c.match(puni('./index.html'))) spremno = true;
+          if (await c.match(puni('./vendor/jspdf.umd.min.js'))) imaPdf = true;
+        }
+        if (!spremno) razlog = 'Osnovni dio se još preuzima. Ostani na internetu još par sekundi.';
       }
     }
   } catch(e) {
     razlog = 'Nije moguće provjeriti offline status: ' + e.message;
   }
   offlineSpremno = spremno;
+  offlinePdf     = imaPdf;
   offlineRazlog  = razlog;
   chip.className  = 'off-chip ' + (spremno ? 'spremno' : 'ceka');
   txt.textContent = spremno ? 'Offline spremno' : 'Priprema…';
-  return spremno;
+  return spremno && imaPdf;
 }
 
-function offlineDetalji() {
-  if (offlineSpremno) {
+async function offlineDetalji() {
+  await provjeriOffline();
+  if (offlineSpremno && offlinePdf) {
     alert('✓ Spremno za rad bez interneta\n\n' +
-          'Aplikacija i svi njeni dijelovi (uključujući PDF izvještaj) su sačuvani na uređaju. ' +
-          'Možeš je koristiti na terenu bez signala.\n\n' +
+          'Aplikacija i PDF izvještaj su sačuvani na uređaju. Možeš raditi na terenu bez signala.\n\n' +
           'Savjet: dodaj je na početni ekran preko dugmeta "Instaliraj" da se otvara kao prava aplikacija.');
+  } else if (offlineSpremno) {
+    if (confirm('✓ Aplikacija radi bez interneta\n\n' +
+                'Unos, izmjena i čuvanje podataka rade i bez signala.\n\n' +
+                '⏳ Još se preuzima samo modul za PDF izvještaj (oko 360 KB). Do tada PDF neće raditi offline.\n\n' +
+                'Preuzeti sada?')) {
+      dopuniOffline();
+    }
   } else {
-    alert('⏳ Još nije spremno za offline\n\n' + (offlineRazlog || 'Sadržaj se priprema.') +
-          '\n\nVažno: aplikaciju treba jednom otvoriti DOK IMAŠ internet, da se sve preuzme na uređaj. ' +
-          'Poslije toga radi i bez signala.');
+    if (confirm('⏳ Još nije spremno za offline\n\n' + (offlineRazlog || 'Sadržaj se priprema.') +
+                '\n\nAplikaciju treba jednom otvoriti DOK IMAŠ internet, da se preuzme na uređaj.\n\n' +
+                'Pokušati ponovo sada?')) {
+      dopuniOffline();
+    }
   }
+}
+
+// Zatraži od service workera da dopuni ono što ranije nije uspjelo
+function dopuniOffline() {
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller) { showToast('Osvježi stranicu dok imaš internet'); return; }
+  showToast('Preuzimanje u toku…');
+  sw.controller.postMessage({ tip: 'dopuni' });
+  let n = 0;
+  const t = setInterval(async () => {
+    if (await provjeriOffline() || ++n > 20) {
+      clearInterval(t);
+      if (offlineSpremno && offlinePdf) showToast('Spremno za offline rad');
+    }
+  }, 1500);
 }
 
 if ('serviceWorker' in navigator) {
@@ -2606,13 +2634,20 @@ if ('serviceWorker' in navigator) {
 
 window.addEventListener('DOMContentLoaded', () => {
   prikaziInstallKarticu();
-  // Provjeravaj dok se keširanje ne završi (instalacija SW-a traje koji trenutak)
+  // Provjeravaj dok se keširanje ne završi. Na slabom signalu preuzimanje
+  // traje duže, pa provjeravamo do 2 minute umjesto ranijih 14 sekundi.
   let pokusaj = 0;
   const tik = setInterval(async () => {
-    const ok = await provjeriOffline();
-    if (ok || ++pokusaj > 12) clearInterval(tik);
-  }, 1200);
+    const gotovo = await provjeriOffline();
+    if (gotovo || ++pokusaj > 60) clearInterval(tik);
+  }, 2000);
   provjeriOffline();
+});
+
+// Osvježi status kad se korisnik vrati u app ili u doseg signala
+document.addEventListener('visibilitychange', () => { if (!document.hidden) provjeriOffline(); });
+window.addEventListener('online', () => {
+  provjeriOffline().then(gotovo => { if (!gotovo) dopuniOffline(); });
 });
 
 // Popuni print meta prije štampe

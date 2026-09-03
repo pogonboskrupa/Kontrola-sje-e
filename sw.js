@@ -1,37 +1,69 @@
-const CACHE = 'kp-v8';
+const CACHE = 'kp-v9';
 
 // Koliko čekati mrežu pri otvaranju app-a prije nego se posluži keš.
 // Kratko, da na slabom signalu (teren) app ne "visi".
 const NAV_TIMEOUT = 3000;
 
-// Svi fajlovi se isporučuju uz app (nema više eksternog CDN-a) – moraju
-// se uspješno keširati da bi app radio 100% offline, od prvog otvaranja.
-const ASSETS = [
+// OSNOVNO = bez ovoga se app ne može otvoriti offline. Malo i brzo,
+// da app postane upotrebljiv offline za par sekundi.
+const OSNOVNO = [
   './',
   './index.html',
   './manifest.json',
-  './icons/icon.svg',
   './icons/icon-192.png',
+];
+
+// DODATNO = korisno, ali ne smije blokirati. Preuzima se u pozadini i
+// svaki fajl zasebno, da jedan neuspjeh (slab signal) ne obori sve
+// ostalo – to je bio uzrok "vječne pripreme" kad je lista bila velika
+// i išla kroz jedan sve-ili-ništa addAll().
+const DODATNO = [
+  './vendor/jspdf.umd.min.js',
+  './icons/icon.svg',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/icon-apple-180.png',
   './icons/screenshot-narrow.png',
   './icons/screenshot-wide.png',
-  './vendor/jspdf.umd.min.js',
 ];
+
+// Kešira listu fajlo po fajl; vraća koliko ih nije uspjelo.
+async function kesirajPojedinacno(lista) {
+  const c = await caches.open(CACHE);
+  const r = await Promise.allSettled(lista.map(async u => {
+    if (await c.match(u)) return 'vec';   // već imamo, ne skidaj ponovo
+    return c.add(u);
+  }));
+  return r.filter(x => x.status === 'rejected').length;
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then(c => c.addAll(OSNOVNO))      // app shell – mora uspjeti
+      .then(() => self.skipWaiting())
   );
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+    // Ostatak skidamo tek nakon preuzimanja kontrole, pa app radi
+    // offline i dok se ovo još preuzima u pozadini.
+    await kesirajPojedinacno(DODATNO);
+  })());
+});
+
+// Stranica može zatražiti da se dopuni ono što ranije nije uspjelo
+// (npr. kad se korisnik vrati u doseg signala).
+self.addEventListener('message', e => {
+  if (e.data && e.data.tip === 'dopuni') {
+    e.waitUntil(kesirajPojedinacno(DODATNO).then(neuspjelo => {
+      if (e.source) e.source.postMessage({ tip: 'dopunjeno', neuspjelo });
+    }));
+  }
 });
 
 function mrezaSaTimeoutom(request, ms) {
