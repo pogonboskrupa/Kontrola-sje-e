@@ -11,8 +11,8 @@
 <meta name="description" content="Kontrola primke i sječe šume – radi offline">
 <meta name="theme-color" content="#1a3a2a">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" sizes="192x192" href="icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512" href="icons/icon-512.png">
+<link rel="apple-touch-icon" href="icons/icon-apple-180.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-apple-180.png">
 <title>Kontrola sječe</title>
 <style>
 :root {
@@ -32,7 +32,8 @@
   --g1: #f2f2f7;
   --white: #ffffff;
   --border: #d1d5db;
-  --sh: 0 2px 8px rgba(0,0,0,0.12);
+  --sh: 0 1px 3px rgba(20,40,30,0.07), 0 6px 16px rgba(20,40,30,0.08);
+  --sh-lift: 0 2px 5px rgba(20,40,30,0.09), 0 10px 26px rgba(20,40,30,0.12);
   --r: 12px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -122,6 +123,7 @@ body {
 .meta-full { grid-column: 1 / -1; }
 
 /* ══ STATS BAR ══ */
+.stats-bar-wrap { position: relative; }
 .stats-bar {
   display: flex; gap: 8px; padding: 12px 16px;
   overflow-x: auto; scroll-snap-type: x mandatory;
@@ -129,6 +131,11 @@ body {
   scrollbar-width: none;
 }
 .stats-bar::-webkit-scrollbar { display: none; }
+.stats-bar-fade {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 28px;
+  background: linear-gradient(to right, rgba(242,242,247,0), var(--g1));
+  pointer-events: none;
+}
 .stat-pill {
   flex: 0 0 auto; scroll-snap-align: start;
   background: white; border-radius: 10px;
@@ -160,6 +167,13 @@ body {
   border-radius: 8px; font-size: 13px; background: var(--g1);
   color: var(--g7); max-width: 140px;
 }
+.filter-btn {
+  padding: 7px 10px; border: 1.5px solid var(--border);
+  border-radius: 8px; font-size: 13px; background: var(--g1);
+  color: var(--gm); font-weight: 600; cursor: pointer; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.filter-btn:active { background: var(--gp); border-color: var(--gl); }
 
 /* ══ FAB (Floating Add Button) ══ */
 .fab {
@@ -183,10 +197,11 @@ body {
   background: white; border-radius: var(--r);
   box-shadow: var(--sh); overflow: hidden;
   border-left: 4px solid var(--g3);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .stablo-card.has-diff { border-left-color: var(--red); }
 .stablo-card.ok { border-left-color: var(--gl); }
+.stablo-card.expanded { box-shadow: var(--sh-lift); }
 
 .card-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -232,6 +247,39 @@ body {
 .sl-redovni { background: var(--gp); color: var(--gm); }
 .sl-razlike { background: #fef4e8; color: #b45309; }
 
+/* ══ SKLOPIVA SEKCIJA (redovni premjer) ══ */
+.sec-sklopiva {
+  border: 1.5px solid var(--border); border-radius: 10px;
+  padding: 8px 10px; margin-top: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.sec-sklopiva.otvorena { border-color: var(--gl); background: #fbfefc; }
+.sec-glava {
+  display: flex; align-items: center; gap: 8px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  min-height: 34px;
+}
+.sec-glava .section-label { margin-bottom: 0; flex-shrink: 0; }
+.sec-sazetak {
+  flex: 1; min-width: 0; text-align: right;
+  font-size: 12px; color: var(--g5);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sec-sazetak.popunjen { color: var(--gm); font-weight: 700; }
+.sec-strelica {
+  flex-shrink: 0; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gm); font-size: 20px; line-height: 1;
+  border-radius: 50%; background: var(--g1);
+  transition: transform 0.2s ease, background 0.15s;
+}
+.sec-sklopiva.otvorena .sec-strelica { transform: rotate(90deg); background: var(--gp); }
+.sec-tijelo { display: none; padding-top: 10px; }
+.sec-sklopiva.otvorena .sec-tijelo { display: block; }
+/* Razlike nemaju smisla dok redovni premjer nije unesen */
+.sec-razlike.prazna { display: none; }
+
 .input-row {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;
 }
@@ -254,6 +302,7 @@ body {
   outline: none; border-color: var(--gl); background: white;
 }
 .field-group input[type=number] { font-variant-numeric: tabular-nums; }
+.print-val { display: none; }
 
 /* Razlike prikaz */
 .diff-row {
@@ -272,7 +321,15 @@ body {
 .dv.pos { color: var(--red); }
 .dv.neg { color: var(--blue); }
 .dv.zero { color: var(--g3); font-weight: 400; }
-.dv.diff-klas { color: var(--red); font-size: 11px; }
+.dv.diff-klas {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.diff-box-klasa { min-width: 0; }
+.dk-line {
+  color: var(--red); font-size: 10px; font-weight: 700;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dk-arrow { color: var(--g3); font-size: 8px; line-height: 1; }
 
 /* Foto i akcije */
 .card-actions {
@@ -337,6 +394,13 @@ body {
 .btn-pdf { background: #e53935; color: white; }
 
 /* Menu modal */
+.menu-section-label {
+  font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--gm);
+  padding: 0 2px 6px; margin: 18px 0 2px;
+  border-bottom: 2px solid var(--gp);
+}
+.menu-section-label:first-child { margin-top: 2px; }
 .menu-item {
   display: flex; align-items: center; gap: 14px;
   padding: 14px 4px; border-bottom: 1px solid var(--g1);
@@ -353,6 +417,7 @@ body {
 .mi-blue  { background: var(--blue-p); }
 .mi-amber { background: #fff8e1; }
 .mi-red   { background: var(--red-p); }
+.mi-purple { background: #f1e8fd; }
 
 /* ══ FOTO MODAL ══ */
 .photo-upload-zone {
@@ -471,7 +536,7 @@ body {
 @media print {
   .fab, .header-btns, .toolbar, .card-actions, .card-chevron,
   .field-group input, .field-group select, .toast, .modal-overlay,
-  .stats-bar, .meta-bar, .meta-toggle-btn { display: none !important; }
+  .stats-bar, .stats-bar-fade, .meta-bar, .meta-toggle-btn { display: none !important; }
 
   body { background: white; font-size: 11px; }
   .header { position: static; box-shadow: none; }
@@ -509,10 +574,21 @@ body {
   .stablo-card.has-diff { border-left-color: #c0392b !important; }
   .stablo-card.ok       { border-left-color: #52b788 !important; }
   .card-body { display: block !important; }
+  .card-chevron { display: none !important; }
+  /* Sklopljeni redovni premjer se pri štampi mora vidjeti */
+  .sec-tijelo   { display: block !important; padding-top: 4px; }
+  .sec-strelica, .sec-sazetak { display: none !important; }
+  .sec-sklopiva { border: none; padding: 0; background: none !important; }
   .data-section { margin-top: 8px; }
   .input-row { gap: 4px; margin-bottom: 4px; }
   .field-group { gap: 1px; }
   .field-group label { font-size: 9px; }
+  .print-val {
+    display: block !important;
+    padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: #111; background: #f7f7f7;
+    min-height: 12px;
+  }
   .diff-row { gap: 4px; }
   .diff-box { padding: 4px 6px; }
 }
@@ -525,6 +601,52 @@ body {
   position: sticky; top: 0; z-index: 50;
   box-shadow: 0 2px 12px rgba(0,0,0,0.3);
 }
+/* ══ OFFLINE STATUS + INSTALACIJA ══ */
+.off-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+  background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.85);
+  white-space: nowrap;
+}
+.off-chip.spremno { background: rgba(82,183,136,0.28); color: #b7f0d2; }
+.off-chip.ceka    { background: rgba(255,193,7,0.22);  color: #ffe08a; }
+.off-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.install-card {
+  margin: 14px 16px 0; padding: 14px;
+  background: white; border-radius: var(--r);
+  box-shadow: var(--sh); border-left: 4px solid var(--gl);
+  display: flex; align-items: center; gap: 12px;
+}
+.install-card .ic-ikona { font-size: 26px; flex-shrink: 0; }
+.install-card .ic-tekst { flex: 1; min-width: 0; }
+.install-card .ic-naslov { font-size: 14px; font-weight: 700; color: var(--g9); }
+.install-card .ic-sub { font-size: 12px; color: var(--g5); margin-top: 2px; line-height: 1.4; }
+.install-card .ic-btn {
+  background: var(--gm); color: white; border: none;
+  padding: 9px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.install-card .ic-btn:active { background: var(--gd); }
+.install-card .ic-x {
+  background: none; border: none; color: var(--g3);
+  font-size: 18px; cursor: pointer; padding: 2px 4px; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.home-tabs {
+  display: flex; gap: 6px; padding: 10px 16px 0;
+  background: var(--gd); position: sticky; top: 62px; z-index: 49;
+}
+.home-tab {
+  flex: 1; border: none; cursor: pointer;
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7);
+  padding: 10px 8px; font-size: 13px; font-weight: 700;
+  border-radius: 10px 10px 0 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s, color 0.15s;
+}
+.home-tab.active { background: var(--g1); color: var(--gd); }
 .home-lista {
   padding: 14px 16px;
   padding-bottom: calc(90px + var(--safe-bottom));
@@ -540,24 +662,33 @@ body {
   background: white; border-radius: var(--r);
   box-shadow: var(--sh); border-left: 4px solid var(--g3);
   margin-bottom: 10px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.kard:active { opacity: 0.82; }
-.kard.kard-diff { border-left-color: var(--red); }
-.kard.kard-ok   { border-left-color: var(--gl); }
+.kard:active { transform: scale(0.99); box-shadow: 0 1px 2px rgba(20,40,30,0.06); }
+.kard.kard-diff { border-left-color: var(--red); background: linear-gradient(to right, var(--red-p) 0%, white 90px); }
+.kard.kard-ok   { border-left-color: var(--gl); background: linear-gradient(to right, var(--gp) 0%, white 90px); }
 .kard-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px; }
 .kard-info { flex: 1; min-width: 0; }
 .kard-title { font-size: 15px; font-weight: 700; color: var(--g9); }
 .kard-primac { color: var(--gm); }
-.kard-sub { font-size: 12px; color: var(--g5); margin-top: 3px; }
-.kard-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px; }
-.kard-arrow { font-size: 26px; color: var(--g3); font-weight: 300; line-height: 1; }
+.kard-sub { font-size: 12px; color: var(--g5); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kard-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 2px 7px; border-radius: 20px;
+}
+.kard-status.bad { background: var(--red-p); color: var(--red); }
+.kard-status.ok  { background: var(--gp); color: var(--gm); }
+.kard-side { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 10px; }
+.kard-arrow { font-size: 24px; color: var(--g3); font-weight: 300; line-height: 1; transition: transform 0.15s; }
+.kard:active .kard-arrow { transform: translateX(2px); }
 .kard-del-btn {
-  background: none; border: none; color: var(--g3); font-size: 18px;
-  cursor: pointer; padding: 4px 6px; border-radius: 6px;
+  background: none; border: none; color: var(--g3); font-size: 17px;
+  cursor: pointer; padding: 6px 7px; border-radius: 8px;
   -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s;
 }
 .kard-del-btn:active { color: var(--red); background: var(--red-p); }
 .back-btn {
@@ -578,12 +709,28 @@ body {
       <div class="logo-icon">🌲</div>
       <div class="logo-text">
         <h1>Kontrola sječe</h1>
-        <p>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; offline</p>
+        <p>ŠPD UNSKO SANSKE ŠUME</p>
       </div>
     </div>
+    <div class="off-chip ceka" id="off-chip" onclick="offlineDetalji()" title="Status offline spremnosti">
+      <span class="off-dot"></span><span id="off-chip-tekst">Provjera…</span>
+    </div>
+  </div>
+  <div class="home-tabs">
+    <button class="home-tab active" id="tab-sjeca" onclick="setHomeTab('sjeca')">🌲 Sječa</button>
+    <button class="home-tab" id="tab-otprema" onclick="setHomeTab('otprema')">🚚 Otprema</button>
+  </div>
+  <div class="install-card" id="install-card" style="display:none">
+    <div class="ic-ikona">📲</div>
+    <div class="ic-tekst">
+      <div class="ic-naslov">Instaliraj aplikaciju</div>
+      <div class="ic-sub" id="ic-sub">Dodaj na početni ekran – radi i bez interneta.</div>
+    </div>
+    <button class="ic-btn" id="ic-btn" onclick="instalirajApp()">Instaliraj</button>
+    <button class="ic-x" onclick="sakrijInstall()" title="Sakrij">✕</button>
   </div>
   <div class="home-lista" id="home-lista"></div>
-  <button class="fab" onclick="novaKontrola()" title="Nova kontrola">+</button>
+  <button class="fab" onclick="novaKontrola(homeTab)" title="Nova kontrola">+</button>
 </div>
 
 <!-- ══ SCREEN KONTROLA ══ -->
@@ -593,9 +740,9 @@ body {
 <div class="header">
   <div class="header-top">
     <div class="header-logo">
-      <div class="logo-icon">🌲</div>
+      <div class="logo-icon" id="kontrola-icon">🌲</div>
       <div class="logo-text">
-        <h1>Kontrola sječe</h1>
+        <h1 id="kontrola-title">Kontrola sječe</h1>
         <p>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; offline</p>
       </div>
     </div>
@@ -619,8 +766,12 @@ body {
       <input type="text" id="meta-kontrolor" placeholder="Ime i prezime">
     </div>
     <div class="meta-field">
-      <label>Primač</label>
+      <label id="lbl-primka">Primač</label>
       <input type="text" id="meta-primka" placeholder="Ime primača">
+    </div>
+    <div class="meta-field" id="mf-otpr" style="display:none">
+      <label>Broj otpremnice</label>
+      <input type="text" id="meta-otpr" placeholder="Broj otpremnice">
     </div>
     <div class="meta-field meta-full">
       <label>Napomena</label>
@@ -631,17 +782,19 @@ body {
 
 <!-- ══ PRINT HEADER (skriveno na ekranu, vidljivo pri štampi) ══ -->
 <div class="print-header">
-  <h2>ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata</h2>
+  <h2 id="print-title">ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata</h2>
   <p id="print-sub">Datum štampe: <span id="print-datum-now"></span></p>
 </div>
 <div class="print-meta" style="display:none">
   <div class="print-meta-field"><span>Kontrolant</span><strong id="pm-kontrolor">—</strong></div>
-  <div class="print-meta-field"><span>Primač</span><strong id="pm-primac">—</strong></div>
+  <div class="print-meta-field"><span id="pm-primac-lbl">Primač</span><strong id="pm-primac">—</strong></div>
   <div class="print-meta-field"><span>Odjel / Lokacija</span><strong id="pm-odjel">—</strong></div>
   <div class="print-meta-field"><span>Datum</span><strong id="pm-datum">—</strong></div>
+  <div class="print-meta-field" id="pm-otpr-field" style="display:none"><span>Broj otpremnice</span><strong id="pm-otpr">—</strong></div>
 </div>
 
 <!-- ══ STATS BAR ══ -->
+<div class="stats-bar-wrap">
 <div class="stats-bar" id="stats-bar">
   <div class="stat-pill">
     <div class="sl">Stabala</div>
@@ -673,6 +826,8 @@ body {
   </div>
   <div class="diff-chip ok" id="diff-badge">✓ Bez razlika</div>
 </div>
+<div class="stats-bar-fade" aria-hidden="true"></div>
+</div>
 
 <!-- ══ TOOLBAR ══ -->
 <div class="toolbar">
@@ -685,6 +840,7 @@ body {
       <option value="diff">S razlikama</option>
       <option value="ok">Bez razlika</option>
     </select>
+    <button class="filter-btn" onclick="toggleSviRedovni()" title="Otvori/sklopi redovni premjer na svim zapisima">↕ Redovni</button>
   </div>
   <span style="font-size:12px;color:var(--g5);" id="filter-count"></span>
 </div>
@@ -710,6 +866,8 @@ body {
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <h3>Opcije</h3>
+
+    <div class="menu-section-label">Pregled</div>
     <div class="menu-item" onclick="zatvoriModal('modal-meni');otvoriRekap()">
       <div class="menu-icon mi-amber">📊</div>
       <div>
@@ -717,6 +875,8 @@ body {
         <div style="font-size:12px;color:var(--g5);">Pregled po vrsti i sortimentu – ukupni volumeni</div>
       </div>
     </div>
+
+    <div class="menu-section-label">Podaci</div>
     <div class="menu-item" onclick="spremi();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-green">💾</div>
       <div>
@@ -731,27 +891,6 @@ body {
         <div style="font-size:12px;color:var(--g5);">Otvori prethodno sačuvan fajl</div>
       </div>
     </div>
-    <div class="menu-item" onclick="exportCSV();zatvoriModal('modal-meni')">
-      <div class="menu-icon mi-amber">📊</div>
-      <div>
-        <div>Izvezi CSV</div>
-        <div style="font-size:12px;color:var(--g5);">Za Excel / LibreOffice</div>
-      </div>
-    </div>
-    <div class="menu-item" onclick="exportWord();zatvoriModal('modal-meni')">
-      <div class="menu-icon mi-blue">📝</div>
-      <div>
-        <div>Izvezi Word obrazac</div>
-        <div style="font-size:12px;color:var(--g5);">Pregled kontrole – popunjeni redovi za štampu</div>
-      </div>
-    </div>
-    <div class="menu-item" onclick="exportPDF();zatvoriModal('modal-meni')">
-      <div class="menu-icon mi-red">📄</div>
-      <div>
-        <div>Generiraj PDF izvještaj</div>
-        <div style="font-size:12px;color:var(--g5);">Uključuje podatke i fotografije</div>
-      </div>
-    </div>
     <div class="menu-item" onclick="otvoriUvoz();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-blue">📋</div>
       <div>
@@ -759,6 +898,44 @@ body {
         <div style="font-size:12px;color:var(--g5);">Zalijepi podatke iz međuspremnika</div>
       </div>
     </div>
+
+    <div class="menu-section-label">Izvoz i štampa</div>
+    <div class="menu-item" id="mi-csv" onclick="exportCSV();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-amber">📊</div>
+      <div>
+        <div>Izvezi CSV</div>
+        <div style="font-size:12px;color:var(--g5);">Za Excel / LibreOffice</div>
+      </div>
+    </div>
+    <div class="menu-item" id="mi-word" onclick="exportWord();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-blue">📝</div>
+      <div>
+        <div>Izvezi Word obrazac</div>
+        <div style="font-size:12px;color:var(--g5);">Pregled kontrole – popunjeni redovi za štampu</div>
+      </div>
+    </div>
+    <div class="menu-item" onclick="stampaj();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-green">🖨️</div>
+      <div>
+        <div>Štampaj</div>
+        <div style="font-size:12px;color:var(--g5);">Direktna štampa iz preglednika</div>
+      </div>
+    </div>
+    <div class="menu-item" onclick="exportPDF();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-red">📄</div>
+      <div>
+        <div>Generiraj PDF izvještaj</div>
+        <div style="font-size:12px;color:var(--g5);">Tabelarni pregled + fotografije na kraju</div>
+      </div>
+    </div>
+    <div class="menu-item" onclick="exportPDFDetaljno();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-purple">🖼️</div>
+      <div>
+        <div>Detaljan izvještaj sa slikama</div>
+        <div style="font-size:12px;color:var(--g5);">Svaki komad zasebno, s velikim fotografijama</div>
+      </div>
+    </div>
+
     <div class="menu-item" onclick="zatvoriModal('modal-meni');backToHome()">
       <div class="menu-icon mi-green">🏠</div>
       <div>
@@ -820,7 +997,7 @@ body {
 <!-- ══ PDF OVERLAY ══ -->
 <div class="pdf-overlay" id="pdf-overlay">
   <div class="pdf-spinner"></div>
-  <p>Generiranje PDF-a...</p>
+  <p id="pdf-overlay-tekst">Generiranje PDF-a...</p>
 </div>
 
 <script>
@@ -844,6 +1021,50 @@ let lastVrsta = '';
 let currentFotoId = null;
 let kontrole = [];
 let activeId  = null;
+let activeTip = 'sjeca';
+let homeTab   = 'sjeca';
+
+const TIP_UI = {
+  sjeca: {
+    icon: '🌲',
+    naslov: 'Kontrola sječe',
+    printNaslov: 'ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola sječe šumskih sortimenata',
+    primkaLabel: 'Primač',
+    primkaPlaceholder: 'Ime primača',
+    kSekcija: 'Kontrolni premjer',
+    rSekcija: 'Redovni premjer',
+  },
+  otprema: {
+    icon: '🚚',
+    naslov: 'Kontrola otpreme',
+    printNaslov: 'ŠPD UNSKO SANSKE ŠUME &nbsp;·&nbsp; Kontrola otpreme šumskih sortimenata',
+    primkaLabel: 'Kupac',
+    primkaPlaceholder: 'Naziv kupca',
+    kSekcija: 'Utvrđeno kontrolom',
+    rSekcija: 'Prema otpremnici',
+  },
+};
+
+function applyTipUI(tip) {
+  const u = TIP_UI[tip] || TIP_UI.sjeca;
+  document.getElementById('kontrola-icon').textContent  = u.icon;
+  document.getElementById('kontrola-title').textContent = u.naslov;
+  document.getElementById('print-title').innerHTML      = u.printNaslov;
+  document.getElementById('lbl-primka').textContent      = u.primkaLabel;
+  document.getElementById('meta-primka').placeholder     = u.primkaPlaceholder;
+  document.getElementById('pm-primac-lbl').textContent   = u.primkaLabel;
+  document.getElementById('mf-otpr').style.display       = tip === 'otprema' ? '' : 'none';
+  document.getElementById('pm-otpr-field').style.display = tip === 'otprema' ? '' : 'none';
+  document.getElementById('mi-csv').style.display        = tip === 'otprema' ? 'none' : '';
+  document.getElementById('mi-word').style.display       = tip === 'otprema' ? 'none' : '';
+}
+
+function setHomeTab(tip) {
+  homeTab = tip;
+  document.getElementById('tab-sjeca').classList.toggle('active', tip === 'sjeca');
+  document.getElementById('tab-otprema').classList.toggle('active', tip === 'otprema');
+  renderHome();
+}
 
 // ══════════════════════════════════════════
 //  INIT
@@ -907,6 +1128,9 @@ function addRow(data) {
     rSlozDim: data?.rSlozDim || '',
     photos:   data?.photos   || [],
     expanded: true,
+    // Redovni premjer je sklopljen: na terenu se unosi samo kontrolni,
+    // a redovni se dopunjava kasnije u kancelariji.
+    rOpen:    data?.rOpen    || false,
   };
   rows.push(r);
   renderLista(); updateStats(); autoSave(); updateMetaBarVisibility();
@@ -979,12 +1203,7 @@ function makeCard(r, num) {
       <div class="card-num">${num}</div>
       <div>
         <div class="card-title">${r.vrsta || '<span style="color:var(--g5);font-weight:400;font-style:italic">Vrsta nije odabrana</span>'}</div>
-        <div class="card-sub">
-          Pločica: ${r.ploc || '—'} &nbsp;·&nbsp;
-          K: ${r.kPrec ? r.kPrec+'cm / '+parseFloat(r.kDuz||0).toFixed(2)+'m' : '—'} &nbsp;·&nbsp;
-          R: ${r.rPrec ? r.rPrec+'cm / '+parseFloat(r.rDuz||0).toFixed(2)+'m' : '—'}
-          ${r.photos.length > 0 ? `&nbsp;·&nbsp; 📷${r.photos.length}` : ''}
-        </div>
+        <div class="card-sub">${sazetakZaglavlja(r)}</div>
       </div>
     </div>
     <div class="card-header-right">
@@ -1000,35 +1219,41 @@ function makeCard(r, num) {
 
   // ── Kontrolni premjer ──
   body.innerHTML += `<div class="data-section">
-    <span class="section-label sl-kontrolni">Kontrolni premjer</span>
+    <span class="section-label sl-kontrolni">${TIP_UI[activeTip].kSekcija}</span>
     <div class="input-row">
       <div class="field-group">
         <label>Vrsta drveta</label>
         ${makeSelectHTML(VRSTE, r.vrsta, r.id, 'vrsta')}
+        <span class="print-val">${esc(r.vrsta) || '—'}</span>
       </div>
       <div class="field-group">
         <label>Br. pločice</label>
         <input type="text" value="${esc(r.ploc)}" data-id="${r.id}" data-field="ploc" inputmode="text" autocomplete="off">
+        <span class="print-val">${esc(r.ploc) || '—'}</span>
       </div>
     </div>
     <div class="input-row">
       <div class="field-group" id="fg-kPrec-${r.id}"${isOgrCijepani(r.kSort)?' style="display:none"':''}>
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.kPrec)}" data-id="${r.id}" data-field="kPrec" inputmode="decimal" min="0" step="1" placeholder="0">
+        <span class="print-val">${esc(r.kPrec) || '—'}</span>
       </div>
       <div class="field-group" id="fg-kSloz-${r.id}"${!isOgrCijepani(r.kSort)?' style="display:none"':''}>
         <label>Dim. složaja Š×V (m)</label>
         <input type="text" value="${esc(r.kSlozDim||'')}" data-id="${r.id}" data-field="kSlozDim" placeholder="npr. 0.8×1.4" autocomplete="off">
+        <span class="print-val">${esc(r.kSlozDim||'') || '—'}</span>
       </div>
       <div class="field-group">
         <label id="lbl-kDuz-${r.id}">${isOgrCijepani(r.kSort)?'Dužina složaja (m)':'Dužina (m)'}</label>
         <input type="number" value="${esc(r.kDuz)}" data-id="${r.id}" data-field="kDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        <span class="print-val">${esc(r.kDuz) || '—'}</span>
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
         ${makeSortSelectHTML(r.kSort, r.id, 'kSort', r.vrsta)}
+        <span class="print-val">${esc(r.kSort) || '—'}</span>
       </div>
     </div>
     <div class="vol-display">
@@ -1039,42 +1264,54 @@ function makeCard(r, num) {
       <div class="field-group">
         <label>Napomena</label>
         <input type="text" value="${esc(r.nap)}" data-id="${r.id}" data-field="nap" placeholder="Opcionalno..." autocomplete="off">
+        <span class="print-val">${esc(r.nap) || '—'}</span>
       </div>
     </div>
   </div>`;
 
-  // ── Redovni premjer ──
-  body.innerHTML += `<div class="data-section">
-    <span class="section-label sl-redovni">Redovni premjer</span>
+  // ── Redovni premjer (sklopivo: na terenu se unosi samo kontrolni) ──
+  const rIma = imaPodatke(r, 'r');
+  body.innerHTML += `<div class="data-section sec-sklopiva${r.rOpen ? ' otvorena' : ''}" id="sec-r-${r.id}">
+    <div class="sec-glava" onclick="toggleRedovni(${r.id})">
+      <span class="section-label sl-redovni">${TIP_UI[activeTip].rSekcija}</span>
+      <span class="sec-sazetak${rIma ? ' popunjen' : ''}" id="sec-r-sum-${r.id}">${kratkiPregled(r, 'r')}</span>
+      <span class="sec-strelica">›</span>
+    </div>
+    <div class="sec-tijelo">
     <div class="input-row">
       <div class="field-group" id="fg-rPrec-${r.id}"${isOgrCijepani(r.rSort)?' style="display:none"':''}>
         <label>Prečnik (cm)</label>
         <input type="number" value="${esc(r.rPrec)}" data-id="${r.id}" data-field="rPrec" inputmode="decimal" min="0" step="1" placeholder="0">
+        <span class="print-val">${esc(r.rPrec) || '—'}</span>
       </div>
       <div class="field-group" id="fg-rSloz-${r.id}"${!isOgrCijepani(r.rSort)?' style="display:none"':''}>
         <label>Dim. složaja Š×V (m)</label>
         <input type="text" value="${esc(r.rSlozDim||'')}" data-id="${r.id}" data-field="rSlozDim" placeholder="npr. 0.8×1.4" autocomplete="off">
+        <span class="print-val">${esc(r.rSlozDim||'') || '—'}</span>
       </div>
       <div class="field-group">
         <label id="lbl-rDuz-${r.id}">${isOgrCijepani(r.rSort)?'Dužina složaja (m)':'Dužina (m)'}</label>
         <input type="number" value="${esc(r.rDuz)}" data-id="${r.id}" data-field="rDuz" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+        <span class="print-val">${esc(r.rDuz) || '—'}</span>
       </div>
     </div>
     <div class="input-row single">
       <div class="field-group">
         <label>Sortiment / Klasa</label>
         ${makeSortSelectHTML(r.rSort, r.id, 'rSort', r.vrsta)}
+        <span class="print-val">${esc(r.rSort) || '—'}</span>
       </div>
     </div>
     <div class="vol-display redovni">
       <span class="vol-display-label">Zapremina R${isOgrCijepani(r.rSort)?' (složajni m³)':' – Huber (m³)'}</span>
       <span class="vol-display-value" id="vol-r-${r.id}">${vR !== null ? vR.toFixed(2)+' m³' : '—'}</span>
     </div>
+    </div>
   </div>`;
 
   // ── Razlike ──
   const dvStr = dV !== null ? ((dV >= 0 ? '+' : '') + dV.toFixed(2)) : '—';
-  body.innerHTML += `<div class="data-section">
+  body.innerHTML += `<div class="data-section sec-razlike${rIma ? '' : ' prazna'}" id="raz-${r.id}">
     <span class="section-label sl-razlike">Razlike</span>
     <div class="diff-row" id="diffs-${r.id}">
       <div class="diff-box">
@@ -1089,9 +1326,9 @@ function makeCard(r, num) {
         <div class="dl">Zap. Δ m³</div>
         <div class="dv ${dV === null ? 'zero' : (Math.abs(dV) < 0.001 ? 'zero' : (dV > 0 ? 'pos' : 'neg'))}">${dvStr}</div>
       </div>
-      <div class="diff-box">
+      <div class="diff-box diff-box-klasa">
         <div class="dl">Klasa</div>
-        <div class="dv ${dSort ? 'diff-klas' : 'zero'}">${dSort ? r.kSort.substring(0,6)+'→'+r.rSort.substring(0,6) : '—'}</div>
+        ${klasaDiffHTML(dSort, r)}
       </div>
     </div>
   </div>`;
@@ -1134,6 +1371,24 @@ function makeSortSelectHTML(val, id, field, vrsta) {
 
 function esc(s) { return String(s||'').replace(/"/g,'&quot;'); }
 
+// Sklapanje/rasklapanje redovnog premjera. Ne radimo renderLista() da se
+// ne izgubi fokus i pozicija skrola dok korisnik unosi podatke.
+function toggleRedovni(id) {
+  const r = rows.find(x => x.id === id);
+  if (!r) return;
+  r.rOpen = !r.rOpen;
+  const sec = document.getElementById('sec-r-' + id);
+  if (sec) sec.classList.toggle('otvorena', r.rOpen);
+  autoSave();
+}
+
+function toggleSviRedovni() {
+  const trebaOtvoriti = !rows.every(r => r.rOpen);
+  rows.forEach(r => { r.rOpen = trebaOtvoriti; });
+  renderLista(); autoSave();
+  showToast(trebaOtvoriti ? 'Redovni premjer otvoren' : 'Redovni premjer sklopljen');
+}
+
 function toggleCard(id) {
   const r = rows.find(x => x.id === id);
   if (r) { r.expanded = !r.expanded; renderLista(); }
@@ -1148,6 +1403,8 @@ function onInputChange(e) {
   const r = rows.find(x => x.id === id);
   if (!r) return;
   r[field] = e.target.value;
+  const pv = e.target.parentElement.querySelector('.print-val');
+  if (pv) pv.textContent = e.target.value || '—';
 
   if (field === 'vrsta') {
     lastVrsta = r.vrsta;
@@ -1157,10 +1414,23 @@ function onInputChange(e) {
   if (field === 'rSort') updateSlozajVisibility(id, 'r', r.rSort);
 
   updateVolDisplay(id);
+  updateSekcijaR(r);
   updateCardDiffs(r);
   updateCardHeader(r);
   updateStats();
   autoSave();
+}
+
+// Osvježi sažetak sklopljenog redovnog premjera i vidljivost Razlika
+function updateSekcijaR(r) {
+  const ima = imaPodatke(r, 'r');
+  const sum = document.getElementById('sec-r-sum-' + r.id);
+  if (sum) {
+    sum.textContent = kratkiPregled(r, 'r');
+    sum.classList.toggle('popunjen', ima);
+  }
+  const raz = document.getElementById('raz-' + r.id);
+  if (raz) raz.classList.toggle('prazna', !ima);
 }
 
 function updateSortOptions(rowId, vrsta) {
@@ -1173,6 +1443,8 @@ function updateSortOptions(rowId, vrsta) {
     const opts = sortimenti.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
     sel.innerHTML = `<option value="">— odaberi —</option>${opts}`;
     if (!sortimenti.includes(cur)) { sel.value = ''; if (r) r[field] = ''; }
+    const pv = sel.parentElement.querySelector('.print-val');
+    if (pv) pv.textContent = sel.value || '—';
     updateSlozajVisibility(rowId, field === 'kSort' ? 'k' : 'r', sel.value);
   });
 }
@@ -1213,7 +1485,7 @@ function updateCardDiffs(r) {
     <div class="diff-box"><div class="dl">Prečnik</div><div class="dv ${diffCls(dPrec)}">${formatDiff(dPrec)}</div></div>
     <div class="diff-box"><div class="dl">Dužina</div><div class="dv ${diffCls(dDuz)}">${formatDiff(dDuz)}</div></div>
     <div class="diff-box"><div class="dl">Zap. Δ m³</div><div class="dv ${dV===null?'zero':(Math.abs(dV)<0.001?'zero':(dV>0?'pos':'neg'))}">${dvStr}</div></div>
-    <div class="diff-box"><div class="dl">Klasa</div><div class="dv ${dSort?'diff-klas':'zero'}">${dSort?r.kSort.substring(0,6)+'→'+r.rSort.substring(0,6):'—'}</div></div>`;
+    <div class="diff-box diff-box-klasa"><div class="dl">Klasa</div>${klasaDiffHTML(dSort, r)}</div>`;
 
   // Boja kartice
   const card = document.getElementById('card-' + r.id);
@@ -1223,15 +1495,22 @@ function updateCardDiffs(r) {
   }
 }
 
+// Sažetak ispod naziva vrste: pločica, K i R strana, broj fotografija.
+// Koristi kratkiPregled da se i složajni redovi vide (imaju dimenzije
+// složaja umjesto prečnika).
+function sazetakZaglavlja(r) {
+  const dio = (oznaka, tip) => imaPodatke(r, tip)
+    ? `<b>${oznaka}:</b> ${esc(kratkiPregled(r, tip))}`
+    : `<span style="color:var(--g3)">${oznaka}: —</span>`;
+  const foto = (r.photos && r.photos.length > 0) ? ` &nbsp;·&nbsp; 📷${r.photos.length}` : '';
+  return `Pločica: ${esc(r.ploc) || '—'} &nbsp;·&nbsp; ${dio('K','k')} &nbsp;·&nbsp; ${dio('R','r')}${foto}`;
+}
+
 function updateCardHeader(r) {
   const card = document.getElementById('card-' + r.id);
   if (!card) return;
   const sub = card.querySelector('.card-sub');
-  if (sub) sub.innerHTML = `
-    Pločica: ${r.ploc||'—'} &nbsp;·&nbsp;
-    K: ${r.kPrec ? r.kPrec+'cm / '+parseFloat(r.kDuz||0).toFixed(2)+'m' : '—'} &nbsp;·&nbsp;
-    R: ${r.rPrec ? r.rPrec+'cm / '+parseFloat(r.rDuz||0).toFixed(2)+'m' : '—'}
-    ${r.photos&&r.photos.length>0?`&nbsp;·&nbsp; 📷${r.photos.length}`:''}`;
+  if (sub) sub.innerHTML = sazetakZaglavlja(r);
   const title = card.querySelector('.card-title');
   if (title) title.innerHTML = r.vrsta || '<span style="color:var(--g5);font-weight:400;font-style:italic">Vrsta nije odabrana</span>';
   const dot = card.querySelector('.diff-dot');
@@ -1242,18 +1521,19 @@ function updateCardHeader(r) {
 //  STATISTIKE
 // ══════════════════════════════════════════
 function updateStats() {
-  let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0;
+  let diffPrec=0, diffDuz=0, diffKlas=0, diffSloz=0, totalVK=0, totalVR=0;
   rows.forEach(r => {
     const dp = calcDiff(r.kPrec, r.rPrec);
     const dd = calcDiff(r.kDuz, r.rDuz);
     if (dp !== null && Math.abs(dp) > 0.001) diffPrec++;
     if (dd !== null && Math.abs(dd) > 0.001) diffDuz++;
     if (r.kSort && r.rSort && r.kSort !== r.rSort) diffKlas++;
+    if (slozDimRazlika(r)) diffSloz++;
     const vk = calcVRow(r, 'k'), vr = calcVRow(r, 'r');
     if (vk !== null) totalVK += vk;
     if (vr !== null) totalVR += vr;
   });
-  const totalDiff = diffPrec + diffDuz + diffKlas;
+  const totalDiff = diffPrec + diffDuz + diffKlas + diffSloz;
 
   document.getElementById('stat-ukupno').textContent = rows.length;
   document.getElementById('stat-prec').textContent   = diffPrec;
@@ -1332,12 +1612,53 @@ function diffCls(d) {
   if (d === null || Math.abs(d) < 0.001) return 'zero';
   return d > 0 ? 'pos' : 'neg';
 }
+// Prikaz razlike klase u diff-box-u: dvoredno + odsijeca dugačke nazive
+// umjesto nepredvidivog prelamanja teksta usred riječi.
+function klasaDiffHTML(dSort, r) {
+  if (!dSort) return '<div class="dv zero">—</div>';
+  return `<div class="dv diff-klas">
+    <span class="dk-line">${esc(r.kSort)}</span>
+    <span class="dk-arrow">↓</span>
+    <span class="dk-line">${esc(r.rSort)}</span>
+  </div>`;
+}
 function rowHasDiff(r) {
   const dp = calcDiff(r.kPrec, r.rPrec);
   const dd = calcDiff(r.kDuz, r.rDuz);
   return (dp !== null && Math.abs(dp) > 0.001) ||
          (dd !== null && Math.abs(dd) > 0.001) ||
-         (r.kSort && r.rSort && r.kSort !== r.rSort);
+         (r.kSort && r.rSort && r.kSort !== r.rSort) ||
+         slozDimRazlika(r);
+}
+
+// Složajni redovi nemaju prečnik, pa se razlika vidi samo kroz dimenzije
+// složaja – bez ovoga bi red sa 0.8×1.4 naspram 1.0×1.4 bio "bez razlika".
+function slozDimRazlika(r) {
+  if (!isOgrCijepani(r.kSort) && !isOgrCijepani(r.rSort)) return false;
+  const a = parseSlozDim(r.kSlozDim), b = parseSlozDim(r.rSlozDim);
+  if (!a || !b) return false;
+  return Math.abs(a.w * a.h - b.w * b.h) > 0.0001;
+}
+
+// Ima li strana (k/r) uopšte unesenih podataka
+function imaPodatke(r, tip) {
+  return tip === 'k'
+    ? !!(r.kPrec || r.kDuz || r.kSort || r.kSlozDim)
+    : !!(r.rPrec || r.rDuz || r.rSort || r.rSlozDim);
+}
+
+// Kratak pregled jedne strane za sklopljeni prikaz i zaglavlje kartice
+function kratkiPregled(r, tip) {
+  const sort = tip === 'k' ? r.kSort : r.rSort;
+  const prec = tip === 'k' ? r.kPrec : r.rPrec;
+  const duz  = tip === 'k' ? r.kDuz  : r.rDuz;
+  const dim  = tip === 'k' ? r.kSlozDim : r.rSlozDim;
+  if (!imaPodatke(r, tip)) return 'nije uneseno';
+  const duzStr = duz ? parseFloat(duz).toFixed(2) + ' m' : '?';
+  const glavni = isOgrCijepani(sort)
+    ? (dim || '?') + ' × ' + duzStr
+    : (prec ? prec + ' cm' : '?') + ' · ' + duzStr;
+  return glavni + (sort ? ' · ' + sort : '');
 }
 
 // ══════════════════════════════════════════
@@ -1526,20 +1847,22 @@ function uvezi() {
 // ══════════════════════════════════════════
 function getMeta() {
   return {
-    odjel:     document.getElementById('meta-odjel').value,
-    datum:     document.getElementById('meta-datum').value,
-    kontrolor: document.getElementById('meta-kontrolor').value,
-    primka:    document.getElementById('meta-primka').value,
-    napomena:  document.getElementById('meta-napomena').value,
+    odjel:          document.getElementById('meta-odjel').value,
+    datum:          document.getElementById('meta-datum').value,
+    kontrolor:      document.getElementById('meta-kontrolor').value,
+    primka:         document.getElementById('meta-primka').value,
+    brojOtpremnice: document.getElementById('meta-otpr').value,
+    napomena:       document.getElementById('meta-napomena').value,
   };
 }
 function setMeta(m) {
   if (!m) return;
-  document.getElementById('meta-odjel').value     = m.odjel     || '';
-  document.getElementById('meta-datum').value     = m.datum     || '';
-  document.getElementById('meta-kontrolor').value = m.kontrolor || '';
-  document.getElementById('meta-primka').value    = m.primka    || '';
-  document.getElementById('meta-napomena').value  = m.napomena  || '';
+  document.getElementById('meta-odjel').value     = m.odjel          || '';
+  document.getElementById('meta-datum').value     = m.datum          || '';
+  document.getElementById('meta-kontrolor').value = m.kontrolor      || '';
+  document.getElementById('meta-primka').value    = m.primka         || '';
+  document.getElementById('meta-otpr').value      = m.brojOtpremnice || '';
+  document.getElementById('meta-napomena').value  = m.napomena       || '';
 }
 
 function spremi() {
@@ -1588,6 +1911,7 @@ function novaLista() {
 //  EXPORT WORD
 // ══════════════════════════════════════════
 function exportWord() {
+  if (activeTip === 'otprema') { showToast('Word obrazac je dostupan samo za Kontrolu sječe'); return; }
   const meta = getMeta();
   if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
 
@@ -1796,6 +2120,7 @@ xmlns="http://www.w3.org/TR/REC-html40">
 //  EXPORT CSV
 // ══════════════════════════════════════════
 function exportCSV() {
+  if (activeTip === 'otprema') { showToast('CSV izvoz je dostupan samo za Kontrolu sječe'); return; }
   const meta = getMeta();
   let csv = '\uFEFF';
   csv += `Kontrola sječe šumskih sortimenata\nOdjel;${meta.odjel}\nDatum;${meta.datum}\nKontrolante;${meta.kontrolor}\nPrimač;${meta.primka}\n\n`;
@@ -1816,13 +2141,41 @@ function exportCSV() {
 }
 
 // ══════════════════════════════════════════
+//  ŠTAMPAJ (direktna štampa iz preglednika)
+// ══════════════════════════════════════════
+function stampaj() {
+  if (rows.length === 0) { showToast('Nema zapisa za štampu'); return; }
+  const bila = rows.filter(r => r.expanded).map(r => r.id);
+  rows.forEach(r => r.expanded = true);
+  renderLista();
+  const vrati = () => {
+    rows.forEach(r => r.expanded = bila.includes(r.id));
+    renderLista();
+    window.removeEventListener('afterprint', vrati);
+  };
+  window.addEventListener('afterprint', vrati);
+  window.print();
+}
+
+function imgFormat(dataUrl) {
+  const m = /^data:image\/([a-z0-9]+)/i.exec(dataUrl||'');
+  const t = m ? m[1].toLowerCase() : '';
+  if (t === 'png')  return 'PNG';
+  if (t === 'webp') return 'WEBP';
+  if (t === 'gif')  return 'GIF';
+  if (t === 'bmp')  return 'BMP';
+  return 'JPEG';
+}
+
+// ══════════════════════════════════════════
 //  EXPORT PDF
 // ══════════════════════════════════════════
 async function exportPDF() {
+  if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
   if (!window.jspdf) {
     try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
-    } catch(e) { alert('Nije moguce ucitati PDF biblioteku. Provjeri internet konekciju.'); return; }
+      await loadScript('./vendor/jspdf.umd.min.js');
+    } catch(e) { alert('Nije moguce ucitati PDF biblioteku.'); return; }
   }
 
   document.getElementById('pdf-overlay').classList.add('open');
@@ -1842,25 +2195,27 @@ async function exportPDF() {
     const RED = [192,57,43], BLU = [21,101,192];
 
     // Izracunaj statistike
-    let diffPrec=0, diffDuz=0, diffKlas=0, totalVK=0, totalVR=0;
+    let diffPrec=0, diffDuz=0, diffKlas=0, diffSloz=0, totalVK=0, totalVR=0, skippedPhotos=0;
     rows.forEach(r => {
       const dp=calcDiff(r.kPrec,r.rPrec), dd=calcDiff(r.kDuz,r.rDuz);
       if (dp!==null&&Math.abs(dp)>0.001) diffPrec++;
       if (dd!==null&&Math.abs(dd)>0.001) diffDuz++;
       if (r.kSort&&r.rSort&&r.kSort!==r.rSort) diffKlas++;
+      if (slozDimRazlika(r)) diffSloz++;
       const vk=calcVRow(r,'k'), vr=calcVRow(r,'r');
       if (vk!==null) totalVK+=vk;
       if (vr!==null) totalVR+=vr;
     });
     const dV0 = totalVK - totalVR;
-    const ukDiff = diffPrec + diffDuz + diffKlas;
+    const ukDiff = diffPrec + diffDuz + diffKlas + diffSloz;
 
     // ── ZAGLAVLJE ────────────────────────────────────────────────────
+    const jeOtprema = activeTip === 'otprema';
     doc.setFillColor(...GD); doc.rect(0,0,W,17,'F');
     doc.setFontSize(14); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
     doc.text('SPD UNSKO SANSKE SUME', mg, 8);
     doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(160,210,180);
-    doc.text('KONTROLA SJECE SUMSKIH SORTIMENATA', mg, 14);
+    doc.text(jeOtprema ? 'KONTROLA OTPREME SUMSKIH SORTIMENATA' : 'KONTROLA SJECE SUMSKIH SORTIMENATA', mg, 14);
     doc.setFontSize(7); doc.setTextColor(200,230,210);
     const genDatum = new Date().toLocaleDateString('hr-HR');
     const genVrijeme = new Date().toLocaleTimeString('hr-HR');
@@ -1871,10 +2226,11 @@ async function exportPDF() {
     doc.setFillColor(...GM); doc.rect(0,y,W,14,'F');
     const metaPolja = [
       ['KONTROLANT', meta.kontrolor||'nije uneseno'],
-      ['PRIMAC',     meta.primka   ||'nije uneseno'],
+      [jeOtprema ? 'KUPAC' : 'PRIMAC', meta.primka||'nije uneseno'],
       ['ODJEL',      meta.odjel    ||'nije uneseno'],
       ['DATUM',      meta.datum    ||'nije uneseno'],
     ];
+    if (jeOtprema) metaPolja.push(['BR. OTPREMNICE', meta.brojOtpremnice||'nije uneseno']);
     const mfw = (CW-38) / metaPolja.length;
     metaPolja.forEach(([lab, val], i) => {
       const mx = mg + i * (mfw + 38/metaPolja.length);
@@ -1958,8 +2314,8 @@ async function exportPDF() {
       // Grupni red
       doc.setFillColor(28,62,46); doc.rect(mg,y,CW,GH,'F');
       doc.setFontSize(5.8); doc.setFont('helvetica','bold'); doc.setTextColor(150,210,175);
-      doc.text('KONTROLNI PREMJER', kX+kW/2, y+3,   {align:'center'});
-      doc.text('REDOVNI PREMJER',   rX+rW/2, y+3,   {align:'center'});
+      doc.text(jeOtprema ? 'UTVRDJENO KONTROLOM' : 'KONTROLNI PREMJER', kX+kW/2, y+3,   {align:'center'});
+      doc.text(jeOtprema ? 'PREMA OTPREMNICI'    : 'REDOVNI PREMJER',   rX+rW/2, y+3,   {align:'center'});
       doc.text('RAZLIKE',           dX+dW/2, y+3,   {align:'center'});
       // Vertikalni separatori
       doc.setDrawColor(55,95,70); doc.setLineWidth(0.4);
@@ -2095,11 +2451,14 @@ async function exportPDF() {
           if (px+PW>W-mg) { px=mg; y+=PH+GAP; }
           if (y+PH>H-13)  { doc.addPage(); y=6; px=mg; }
           try {
-            doc.addImage(r.photos[pi].data,'JPEG',px,y,PW,PH,undefined,'MEDIUM');
+            doc.addImage(r.photos[pi].data,imgFormat(r.photos[pi].data),px,y,PW,PH,undefined,'MEDIUM');
             doc.setDrawColor(...GM); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
             doc.setFontSize(5.5); doc.setTextColor(100,100,100); doc.setFont('helvetica','normal');
             doc.text(r.photos[pi].name.substring(0,28), px, y+PH+3.5);
-          } catch(e) {}
+          } catch(e) {
+            console.error('addImage failed za '+r.photos[pi].name, e);
+            skippedPhotos++;
+          }
           px+=PW+GAP;
         }
         y+=PH+GAP+8;
@@ -2113,17 +2472,18 @@ async function exportPDF() {
       doc.setFillColor(...G1); doc.rect(0,H-9,W,9,'F');
       doc.setDrawColor(195,208,200); doc.setLineWidth(0.2); doc.line(mg,H-9,W-mg,H-9);
       doc.setFontSize(6.2); doc.setFont('helvetica','normal'); doc.setTextColor(120,130,125);
-      const fTxt = 'SPD Unsko-sanske sume  |  Kontrola sjece  |  Odjel: '+(meta.odjel||'-')+
+      const fTxt = 'SPD Unsko-sanske sume  |  '+(jeOtprema?'Kontrola otpreme':'Kontrola sjece')+'  |  Odjel: '+(meta.odjel||'-')+
         '  |  Datum: '+(meta.datum||'-')+
         '  |  Kontrolant: '+(meta.kontrolor||'-')+
-        '  |  Primac: '+(meta.primka||'-');
+        '  |  '+(jeOtprema?'Kupac':'Primac')+': '+(meta.primka||'-')+
+        (jeOtprema ? '  |  Otpremnica: '+(meta.brojOtpremnice||'-') : '');
       doc.text(fTxt, mg, H-3.5);
       doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
       doc.text(i+' / '+pCnt, W-mg, H-3.5, {align:'right'});
     }
 
-    doc.save('kontrola_sjece_'+(meta.datum||'izvjestaj')+'.pdf');
-    showToast('PDF sacuvan');
+    doc.save((jeOtprema?'kontrola_otpreme_':'kontrola_sjece_')+(meta.datum||'izvjestaj')+'.pdf');
+    showToast(skippedPhotos>0 ? `PDF sacuvan (${skippedPhotos} foto nije ucitano)` : 'PDF sacuvan');
 
   } catch(err) {
     console.error(err); alert('Greska pri generiranju PDF-a: '+err.message);
@@ -2131,6 +2491,219 @@ async function exportPDF() {
     document.getElementById('pdf-overlay').classList.remove('open');
   }
 }
+
+// ══════════════════════════════════════════
+//  EXPORT PDF – DETALJAN (svaki komad zasebno, s velikim fotografijama)
+// ══════════════════════════════════════════
+async function exportPDFDetaljno() {
+  if (rows.length === 0) { showToast('Nema zapisa za izvoz'); return; }
+  if (!window.jspdf) {
+    try {
+      await loadScript('./vendor/jspdf.umd.min.js');
+    } catch(e) { alert('Nije moguce ucitati PDF biblioteku.'); return; }
+  }
+
+  const overlayTxt = document.getElementById('pdf-overlay-tekst');
+  if (overlayTxt) overlayTxt.textContent = 'Generiranje detaljnog izvještaja...';
+  document.getElementById('pdf-overlay').classList.add('open');
+  await new Promise(r => setTimeout(r, 120));
+
+  try {
+    const { jsPDF } = window.jspdf;
+    // A4 uspravno – jedan komad ispod drugog, s prostorom za velike slike
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const meta = getMeta();
+    const W = 210, H = 297, mg = 12;
+    const CW = W - mg * 2;
+    let skippedPhotos = 0;
+
+    const GD=[26,58,42], GM=[45,106,79], GL=[82,183,136], GP=[216,243,220];
+    const G1=[242,242,247], G5=[99,99,102], RED=[192,57,43], BLU=[21,101,192];
+
+    const jeOtprema = activeTip === 'otprema';
+    const labK = jeOtprema ? 'UTVRDJENO KONTROLOM' : 'KONTROLNI PREMJER';
+    const labR = jeOtprema ? 'PREMA OTPREMNICI'    : 'REDOVNI PREMJER';
+
+    // ── NASLOVNA TRAKA ──────────────────────────────────────────────
+    doc.setFillColor(...GD); doc.rect(0,0,W,17,'F');
+    doc.setFontSize(13); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+    doc.text('SPD UNSKO SANSKE SUME', mg, 8);
+    doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(160,210,180);
+    doc.text('DETALJAN IZVJESTAJ SA FOTOGRAFIJAMA  ·  ' + (jeOtprema?'KONTROLA OTPREME':'KONTROLA SJECE'), mg, 14);
+
+    // ── META PODACI ─────────────────────────────────────────────────
+    let y = 17;
+    doc.setFillColor(...GM); doc.rect(0,y,W,14,'F');
+    const metaPolja = [
+      ['KONTROLANT', meta.kontrolor||'nije uneseno'],
+      [jeOtprema?'KUPAC':'PRIMAC', meta.primka||'nije uneseno'],
+      ['ODJEL', meta.odjel||'nije uneseno'],
+      ['DATUM', meta.datum||'nije uneseno'],
+    ];
+    if (jeOtprema) metaPolja.push(['BR. OTPREMNICE', meta.brojOtpremnice||'nije uneseno']);
+    const mcw = CW / metaPolja.length;
+    metaPolja.forEach(([lab,val],i) => {
+      const mx = mg + i*mcw;
+      doc.setFontSize(5.5); doc.setFont('helvetica','bold'); doc.setTextColor(160,210,180);
+      doc.text(lab, mx, y+5.5);
+      doc.setFontSize(7.5); doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+      doc.text(String(val).substring(0,18), mx, y+11.5);
+    });
+    y += 14;
+
+    // ── SAŽETAK ──────────────────────────────────────────────────────
+    const brojSaFoto = rows.filter(r=>r.photos&&r.photos.length>0).length;
+    const brojSaRazlikom = rows.filter(rowHasDiff).length;
+    doc.setFillColor(...G1); doc.rect(0,y,W,9,'F');
+    doc.setFontSize(7.5); doc.setFont('helvetica','bold');
+    doc.setTextColor(...GD);
+    const sazetakTxt = rows.length+' zapisa  ·  '+brojSaFoto+' sa fotografijama  ·  '+
+      (brojSaRazlikom>0 ? brojSaRazlikom+' sa razlikom' : 'bez razlika');
+    doc.text(sazetakTxt, W/2, y+5.8, {align:'center'});
+    y += 9 + 5;
+
+    // ── FUNKCIJA ZA ISPIS JEDNE STRANE (K ili R) ──────────────────────
+    function crtajStranu(x, w, r, tip, boja) {
+      const sort = tip==='k' ? r.kSort : r.rSort;
+      const prec = tip==='k' ? r.kPrec : r.rPrec;
+      const duz  = tip==='k' ? r.kDuz  : r.rDuz;
+      const dim  = tip==='k' ? r.kSlozDim : r.rSlozDim;
+      const vol  = calcVRow(r, tip);
+      const slozajni = isOgrCijepani(sort);
+      let yy = y;
+      doc.setFontSize(6.3); doc.setFont('helvetica','bold'); doc.setTextColor(...boja);
+      doc.text(tip==='k'?labK:labR, x, yy); yy += 5;
+      doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(35,35,35);
+      // jsPDF-ov osnovni font (WinAnsi) nema č/ć/đ/š/ž – tekst mora biti ASCII
+      const glavniTxt = slozajni
+        ? 'Dim. slozaja: '+(dim||'—')+'   Duzina: '+(duz?parseFloat(duz).toFixed(2)+' m':'—')
+        : 'Precnik: '+(prec||'—')+' cm   Duzina: '+(duz?parseFloat(duz).toFixed(2)+' m':'—');
+      doc.text(glavniTxt, x, yy); yy += 5;
+      doc.text('Sortiment/Klasa: '+(sort||'—'), x, yy); yy += 5.5;
+      doc.setFont('helvetica','bold'); doc.setTextColor(...boja);
+      doc.text('Zapremina: '+(vol!==null?vol.toFixed(2)+' m³':'—')+(slozajni?' (slozajni)':''), x, yy);
+      return yy;
+    }
+
+    // ── STAVKE ──────────────────────────────────────────────────────
+    const PW=87, PH=65, PGAP=4;
+    rows.forEach((r, idx) => {
+      const hd = rowHasDiff(r);
+      const nFoto = (r.photos && r.photos.length) || 0;
+      const nRedFoto = nFoto>0 ? Math.ceil(nFoto/2) : 0;
+      const visFoto = nFoto>0 ? nRedFoto*(PH+PGAP) : 7;
+      const visNap = r.nap ? 6 : 0;
+      const visRaz = hd ? 11 : 0;
+      const ukupnaVis = 9 + 24 + visRaz + visNap + 3 + visFoto + 6;
+
+      // Ne dozvoli da zaglavlje stavke ostane samo na dnu stranice
+      if (y + Math.min(ukupnaVis, 9+24+8) > H-12) { doc.addPage(); y = 12; }
+
+      // Zaglavlje stavke
+      doc.setFillColor(...(hd ? [253,235,233] : GP));
+      doc.rect(mg, y, CW, 9, 'F');
+      doc.setFontSize(9); doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+      doc.text('#'+(idx+1)+'  '+(r.vrsta||'Vrsta nije odabrana')+(r.ploc?'   ·  Plocica: '+r.ploc:''), mg+3, y+6);
+      doc.setFontSize(7); doc.setFont('helvetica','bold');
+      doc.setTextColor(...(hd ? RED : GM));
+      doc.text(hd ? 'RAZLIKA' : 'BEZ RAZLIKE', W-mg-3, y+6, {align:'right'});
+      y += 9 + 3;
+
+      // Dvije kolone K / R
+      const colW = (CW - 8) / 2;
+      const yPoK = crtajStranu(mg, colW, r, 'k', BLU);
+      const yPoR = crtajStranu(mg+colW+8, colW, r, 'r', GM);
+      doc.setDrawColor(220,224,220); doc.setLineWidth(0.2);
+      doc.line(mg+colW+4, y, mg+colW+4, Math.max(yPoK,yPoR)+1.5);
+      y = Math.max(yPoK, yPoR) + 4;
+
+      // Razlike (samo ako postoje)
+      if (hd) {
+        const dPrec = calcDiff(r.kPrec, r.rPrec), dDuz = calcDiff(r.kDuz, r.rDuz);
+        const vK = calcVRow(r,'k'), vR = calcVRow(r,'r');
+        const dV = (vK!==null&&vR!==null) ? vK-vR : null;
+        const dSort = (r.kSort && r.rSort && r.kSort!==r.rSort);
+        const dSloz = slozDimRazlika(r);
+        doc.setFillColor(255,248,247); doc.rect(mg,y,CW,8,'F');
+        doc.setDrawColor(...RED); doc.setLineWidth(0.3); doc.line(mg,y,mg,y+8);
+        const stavkeR = [
+          'Precnik: '+formatDiff(dPrec),
+          'Duzina: '+formatDiff(dDuz),
+          'Zapremina: '+(dV!==null?(dV>=0?'+':'')+dV.toFixed(2)+' m³':'—'),
+        ];
+        if (dSort) stavkeR.push('Klasa: '+r.kSort.substring(0,10)+' -> '+r.rSort.substring(0,10));
+        if (dSloz) stavkeR.push('Slozaj: '+(r.kSlozDim||'—')+' -> '+(r.rSlozDim||'—'));
+        doc.setFontSize(6.5); doc.setFont('helvetica','bold'); doc.setTextColor(...RED);
+        doc.text('RAZLIKE:  ' + stavkeR.join('     '), mg+4, y+5);
+        y += 8 + 3;
+      }
+
+      // Napomena
+      if (r.nap) {
+        doc.setFontSize(6.8); doc.setFont('helvetica','italic'); doc.setTextColor(...G5);
+        doc.text('Napomena: '+String(r.nap).substring(0,120), mg, y+3.5);
+        y += 6;
+      }
+      y += 3;
+
+      // Fotografije
+      if (nFoto > 0) {
+        let px = mg;
+        for (let pi=0; pi<r.photos.length; pi++) {
+          if (px+PW > W-mg) { px=mg; y+=PH+PGAP; }
+          if (y+PH > H-12) { doc.addPage(); y=12; px=mg; }
+          try {
+            doc.addImage(r.photos[pi].data, imgFormat(r.photos[pi].data), px, y, PW, PH, undefined, 'MEDIUM');
+            doc.setDrawColor(...GM); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
+          } catch(e) {
+            console.error('addImage failed za '+r.photos[pi].name, e);
+            skippedPhotos++;
+            doc.setDrawColor(...RED); doc.setLineWidth(0.3); doc.rect(px,y,PW,PH);
+            doc.setFontSize(6.5); doc.setTextColor(...RED);
+            doc.text('Slika nije ucitana', px+PW/2, y+PH/2, {align:'center'});
+          }
+          px += PW+PGAP;
+        }
+        y += PH + 8;
+      } else {
+        doc.setFontSize(7); doc.setFont('helvetica','italic'); doc.setTextColor(...G5);
+        doc.text('Nema fotografija za ovaj zapis.', mg, y+3);
+        y += 8;
+      }
+
+      // Razdjelnik prije sljedeće stavke
+      if (idx < rows.length-1) {
+        doc.setDrawColor(225,228,225); doc.setLineWidth(0.3);
+        doc.line(mg, y, W-mg, y);
+        y += 5;
+      }
+    });
+
+    // ── FOOTER na svim stranicama ─────────────────────────────────────
+    const pCnt = doc.getNumberOfPages();
+    for (let i=1; i<=pCnt; i++) {
+      doc.setPage(i);
+      doc.setFillColor(...G1); doc.rect(0,H-9,W,9,'F');
+      doc.setDrawColor(195,208,200); doc.setLineWidth(0.2); doc.line(mg,H-9,W-mg,H-9);
+      doc.setFontSize(5.8); doc.setFont('helvetica','normal'); doc.setTextColor(120,130,125);
+      const fTxt = 'SPD Unsko-sanske sume  |  Detaljan izvjestaj  |  Odjel: '+(meta.odjel||'-')+
+        '  |  Datum: '+(meta.datum||'-')+'  |  Kontrolant: '+(meta.kontrolor||'-');
+      doc.text(fTxt, mg, H-3.5);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...GD);
+      doc.text(i+' / '+pCnt, W-mg, H-3.5, {align:'right'});
+    }
+
+    doc.save((jeOtprema?'kontrola_otpreme_':'kontrola_sjece_')+'detaljno_'+(meta.datum||'izvjestaj')+'.pdf');
+    showToast(skippedPhotos>0 ? `Detaljan izvještaj sačuvan (${skippedPhotos} foto nije učitano)` : 'Detaljan izvještaj sačuvan');
+
+  } catch(err) {
+    console.error(err); alert('Greška pri generiranju izvještaja: '+err.message);
+  } finally {
+    document.getElementById('pdf-overlay').classList.remove('open');
+    if (overlayTxt) overlayTxt.textContent = 'Generiranje PDF-a...';
+  }
+}
+
 // ══════════════════════════════════════════
 //  MULTI-KONTROLA
 // ══════════════════════════════════════════
@@ -2148,7 +2721,7 @@ function loadAll() {
         const data = JSON.parse(old);
         if (data.rows && data.rows.length > 0) {
           kontrole.push({
-            id: genId(), meta: data.meta || {},
+            id: genId(), tip: 'sjeca', meta: data.meta || {},
             rows: data.rows, idCnt: data.idCnt || data.rows.length,
             created: new Date().toISOString(), updated: new Date().toISOString()
           });
@@ -2157,6 +2730,10 @@ function loadAll() {
       }
     } catch(e) {}
   }
+  // Stare kontrole (prije uvođenja Kontrole otpreme) nemaju "tip" – tretiramo ih kao Kontrolu sječe.
+  let migrirano = false;
+  kontrole.forEach(k => { if (!k.tip) { k.tip = 'sjeca'; migrirano = true; } });
+  if (migrirano) saveAll();
 }
 
 function saveAll() {
@@ -2182,10 +2759,12 @@ function showScreen(name) {
   document.getElementById('screen-kontrola').style.display = name === 'kontrola' ? '' : 'none';
 }
 
-function novaKontrola() {
+function novaKontrola(tip) {
+  tip = tip === 'otprema' ? 'otprema' : 'sjeca';
   const k = {
     id: genId(),
-    meta: { odjel: '', datum: new Date().toISOString().split('T')[0], kontrolor: '', primka: '', napomena: '' },
+    tip,
+    meta: { odjel: '', datum: new Date().toISOString().split('T')[0], kontrolor: '', primka: '', brojOtpremnice: '', napomena: '' },
     rows: [], idCnt: 0,
     created: new Date().toISOString(), updated: new Date().toISOString()
   };
@@ -2198,8 +2777,12 @@ function openKontrola(id) {
   const k = kontrole.find(k => k.id === id);
   if (!k) return;
   activeId = id;
-  rows = k.rows.map(r => ({...r}));
+  activeTip = k.tip || 'sjeca';
+  // photos može nedostajati kod starijih sačuvanih kontrola – bez ovoga
+  // renderovanje kartica puca na r.photos.length
+  rows = (k.rows || []).map(r => ({...r, photos: r.photos || []}));
   idCnt = k.idCnt || 0;
+  applyTipUI(activeTip);
   setMeta(k.meta);
   document.getElementById('filter-vrsta').value   = '';
   document.getElementById('filter-razlika').value = '';
@@ -2219,16 +2802,18 @@ function backToHome() {
 
 function renderHome() {
   const lista = document.getElementById('home-lista');
-  if (kontrole.length === 0) {
+  const zaTab = kontrole.filter(k => (k.tip || 'sjeca') === homeTab);
+  if (zaTab.length === 0) {
+    const naziv = homeTab === 'otprema' ? 'kontrolu otpreme' : 'kontrolu sječe';
     lista.innerHTML = `<div class="empty-state">
-      <div class="ei">🌲</div>
+      <div class="ei">${homeTab === 'otprema' ? '🚚' : '🌲'}</div>
       <h3>Nema sačuvanih kontrola</h3>
-      <p>Tapni zeleno <strong>+</strong> dugme da kreiraš prvu kontrolu.</p>
+      <p>Tapni zeleno <strong>+</strong> dugme da kreiraš prvu ${naziv}.</p>
     </div>`;
     return;
   }
   const groups = {};
-  kontrole.forEach(k => {
+  zaTab.forEach(k => {
     const odjel = (k.meta && k.meta.odjel) ? k.meta.odjel : '(bez odjela)';
     if (!groups[odjel]) groups[odjel] = [];
     groups[odjel].push(k);
@@ -2248,12 +2833,13 @@ function makeKontrolaCard(k) {
   const nRows     = k.rows ? k.rows.length : 0;
   const nDiff     = k.rows ? k.rows.filter(r => rowHasDiff(r)).length : 0;
   const datum     = (k.meta && k.meta.datum)     ? k.meta.datum     : '—';
-  const primac    = (k.meta && k.meta.primka)    ? k.meta.primka    : '(bez primača)';
+  const primacLbl = (k.tip === 'otprema') ? 'kupca' : 'primača';
+  const primac    = (k.meta && k.meta.primka)    ? k.meta.primka    : `(bez ${primacLbl})`;
   const kontrolor = (k.meta && k.meta.kontrolor) ? k.meta.kontrolor : '—';
   const hasDiff   = nDiff > 0;
-  const statusStr = nRows === 0 ? '' :
-    hasDiff ? `<span style="color:var(--red)">${nDiff} razlika</span>` :
-              `<span style="color:var(--gm)">bez razlika</span>`;
+  const statusChip = nRows === 0 ? '' :
+    hasDiff ? `<span class="kard-status bad">⚠ ${nDiff} razlika</span>` :
+              `<span class="kard-status ok">✓ bez razlika</span>`;
   const div = document.createElement('div');
   div.className = 'kard' + (hasDiff ? ' kard-diff' : (nRows > 0 ? ' kard-ok' : ''));
   div.innerHTML = `
@@ -2261,10 +2847,9 @@ function makeKontrolaCard(k) {
       <div class="kard-info">
         <div class="kard-title">${esc(datum)} &nbsp;·&nbsp; <span class="kard-primac">${esc(primac)}</span></div>
         <div class="kard-sub">Kontrolor: ${esc(kontrolor)}</div>
-        <div class="kard-sub">${nRows} sortiment${nRows === 1 ? '' : 'a'}${statusStr ? ' &nbsp;·&nbsp; ' + statusStr : ''}</div>
+        <div class="kard-sub">${nRows} sortiment${nRows === 1 ? '' : 'a'}${statusChip}</div>
       </div>
       <div class="kard-side">
-        <div class="diff-dot ${hasDiff ? 'bad' : (nRows > 0 ? 'ok' : '')}"></div>
         <button class="kard-del-btn" title="Obriši">🗑</button>
         <span class="kard-arrow">›</span>
       </div>
@@ -2303,9 +2888,162 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+// ══════════════════════════════════════════
+//  PWA: INSTALACIJA + OFFLINE STATUS
+// ══════════════════════════════════════════
+let deferredPrompt = null;
+let offlineSpremno = false;
+let offlineRazlog  = '';
+let offlinePdf     = false;
+const jeIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+function jeInstalirana() {
+  return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 }
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();          // spriječi automatsku traku, koristi naše dugme
+  deferredPrompt = e;
+  prikaziInstallKarticu();
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  const card = document.getElementById('install-card');
+  if (card) card.style.display = 'none';
+  showToast('Aplikacija instalirana');
+});
+
+function prikaziInstallKarticu() {
+  const card = document.getElementById('install-card');
+  if (!card) return;
+  if (jeInstalirana()) return;                                   // već instalirana
+  if (localStorage.getItem('kp_install_skriven') === '1') return; // korisnik sakrio
+  if (!deferredPrompt && jeIOS) {
+    // iOS Safari nema automatsku instalaciju – daj uputu
+    document.getElementById('ic-sub').textContent = 'Safari: tapni Podijeli ⬆ pa "Dodaj na početni ekran".';
+    document.getElementById('ic-btn').style.display = 'none';
+  } else if (!deferredPrompt) {
+    return;                                                      // preglednik ne nudi instalaciju
+  }
+  card.style.display = 'flex';
+}
+
+async function instalirajApp() {
+  if (!deferredPrompt) { showToast('Instalacija nije dostupna u ovom pregledniku'); return; }
+  deferredPrompt.prompt();
+  const izbor = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  if (izbor && izbor.outcome === 'accepted') {
+    const card = document.getElementById('install-card');
+    if (card) card.style.display = 'none';
+  }
+}
+
+function sakrijInstall() {
+  localStorage.setItem('kp_install_skriven', '1');
+  const card = document.getElementById('install-card');
+  if (card) card.style.display = 'none';
+}
+
+// Provjeri da li je sve zaista spremljeno za rad bez interneta
+async function provjeriOffline() {
+  const chip = document.getElementById('off-chip');
+  const txt  = document.getElementById('off-chip-tekst');
+  if (!chip || !txt) return;
+  let spremno = false, imaPdf = false, razlog = '';
+  try {
+    if (!('serviceWorker' in navigator) || !('caches' in window)) {
+      razlog = 'Ovaj preglednik ne podržava offline rad. Otvori aplikaciju u Chrome-u ili Safari-ju.';
+    } else {
+      const keys = (await caches.keys()).filter(k => k.startsWith('kp-'));
+      if (keys.length === 0) {
+        razlog = (await navigator.serviceWorker.getRegistration())
+          ? 'Preuzimanje je počelo. Ostani na internetu još par sekundi.'
+          : 'Offline dio se nije pokrenuo. Osvježi stranicu dok imaš internet.';
+      } else {
+        // Gledamo SVE kp- keševe, ne samo prvi: pri nadogradnji stari keš
+        // može još postojati i biti nepotpun, pa bi provjera lažno pala.
+        const puni = u => new URL(u, location.href).href;
+        for (const k of keys) {
+          const c = await caches.open(k);
+          if (await c.match(puni('./index.html'))) spremno = true;
+          if (await c.match(puni('./vendor/jspdf.umd.min.js'))) imaPdf = true;
+        }
+        if (!spremno) razlog = 'Osnovni dio se još preuzima. Ostani na internetu još par sekundi.';
+      }
+    }
+  } catch(e) {
+    razlog = 'Nije moguće provjeriti offline status: ' + e.message;
+  }
+  offlineSpremno = spremno;
+  offlinePdf     = imaPdf;
+  offlineRazlog  = razlog;
+  chip.className  = 'off-chip ' + (spremno ? 'spremno' : 'ceka');
+  txt.textContent = spremno ? 'Offline spremno' : 'Priprema…';
+  return spremno && imaPdf;
+}
+
+async function offlineDetalji() {
+  await provjeriOffline();
+  if (offlineSpremno && offlinePdf) {
+    alert('✓ Spremno za rad bez interneta\n\n' +
+          'Aplikacija i PDF izvještaj su sačuvani na uređaju. Možeš raditi na terenu bez signala.\n\n' +
+          'Savjet: dodaj je na početni ekran preko dugmeta "Instaliraj" da se otvara kao prava aplikacija.');
+  } else if (offlineSpremno) {
+    if (confirm('✓ Aplikacija radi bez interneta\n\n' +
+                'Unos, izmjena i čuvanje podataka rade i bez signala.\n\n' +
+                '⏳ Još se preuzima samo modul za PDF izvještaj (oko 360 KB). Do tada PDF neće raditi offline.\n\n' +
+                'Preuzeti sada?')) {
+      dopuniOffline();
+    }
+  } else {
+    if (confirm('⏳ Još nije spremno za offline\n\n' + (offlineRazlog || 'Sadržaj se priprema.') +
+                '\n\nAplikaciju treba jednom otvoriti DOK IMAŠ internet, da se preuzme na uređaj.\n\n' +
+                'Pokušati ponovo sada?')) {
+      dopuniOffline();
+    }
+  }
+}
+
+// Zatraži od service workera da dopuni ono što ranije nije uspjelo
+function dopuniOffline() {
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller) { showToast('Osvježi stranicu dok imaš internet'); return; }
+  showToast('Preuzimanje u toku…');
+  sw.controller.postMessage({ tip: 'dopuni' });
+  let n = 0;
+  const t = setInterval(async () => {
+    if (await provjeriOffline() || ++n > 20) {
+      clearInterval(t);
+      if (offlineSpremno && offlinePdf) showToast('Spremno za offline rad');
+    }
+  }, 1500);
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .catch(err => console.error('SW registracija neuspjela:', err));
+  navigator.serviceWorker.addEventListener('controllerchange', provjeriOffline);
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  prikaziInstallKarticu();
+  // Provjeravaj dok se keširanje ne završi. Na slabom signalu preuzimanje
+  // traje duže, pa provjeravamo do 2 minute umjesto ranijih 14 sekundi.
+  let pokusaj = 0;
+  const tik = setInterval(async () => {
+    const gotovo = await provjeriOffline();
+    if (gotovo || ++pokusaj > 60) clearInterval(tik);
+  }, 2000);
+  provjeriOffline();
+});
+
+// Osvježi status kad se korisnik vrati u app ili u doseg signala
+document.addEventListener('visibilitychange', () => { if (!document.hidden) provjeriOffline(); });
+window.addEventListener('online', () => {
+  provjeriOffline().then(gotovo => { if (!gotovo) dopuniOffline(); });
+});
 
 // Popuni print meta prije štampe
 window.addEventListener('beforeprint', () => {
@@ -2314,6 +3052,7 @@ window.addEventListener('beforeprint', () => {
   document.getElementById('pm-primac').textContent    = meta.primka    || '—';
   document.getElementById('pm-odjel').textContent     = meta.odjel     || '—';
   document.getElementById('pm-datum').textContent     = meta.datum     || '—';
+  document.getElementById('pm-otpr').textContent      = meta.brojOtpremnice || '—';
   document.getElementById('print-datum-now').textContent = new Date().toLocaleString('bs-BA');
 });
 </script>
