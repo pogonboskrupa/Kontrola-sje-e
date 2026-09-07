@@ -32,7 +32,8 @@
   --g1: #f2f2f7;
   --white: #ffffff;
   --border: #d1d5db;
-  --sh: 0 2px 8px rgba(0,0,0,0.12);
+  --sh: 0 1px 3px rgba(20,40,30,0.07), 0 6px 16px rgba(20,40,30,0.08);
+  --sh-lift: 0 2px 5px rgba(20,40,30,0.09), 0 10px 26px rgba(20,40,30,0.12);
   --r: 12px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -122,6 +123,7 @@ body {
 .meta-full { grid-column: 1 / -1; }
 
 /* ══ STATS BAR ══ */
+.stats-bar-wrap { position: relative; }
 .stats-bar {
   display: flex; gap: 8px; padding: 12px 16px;
   overflow-x: auto; scroll-snap-type: x mandatory;
@@ -129,6 +131,11 @@ body {
   scrollbar-width: none;
 }
 .stats-bar::-webkit-scrollbar { display: none; }
+.stats-bar-fade {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 28px;
+  background: linear-gradient(to right, rgba(242,242,247,0), var(--g1));
+  pointer-events: none;
+}
 .stat-pill {
   flex: 0 0 auto; scroll-snap-align: start;
   background: white; border-radius: 10px;
@@ -190,10 +197,11 @@ body {
   background: white; border-radius: var(--r);
   box-shadow: var(--sh); overflow: hidden;
   border-left: 4px solid var(--g3);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .stablo-card.has-diff { border-left-color: var(--red); }
 .stablo-card.ok { border-left-color: var(--gl); }
+.stablo-card.expanded { box-shadow: var(--sh-lift); }
 
 .card-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -313,7 +321,15 @@ body {
 .dv.pos { color: var(--red); }
 .dv.neg { color: var(--blue); }
 .dv.zero { color: var(--g3); font-weight: 400; }
-.dv.diff-klas { color: var(--red); font-size: 11px; }
+.dv.diff-klas {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.diff-box-klasa { min-width: 0; }
+.dk-line {
+  color: var(--red); font-size: 10px; font-weight: 700;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dk-arrow { color: var(--g3); font-size: 8px; line-height: 1; }
 
 /* Foto i akcije */
 .card-actions {
@@ -378,6 +394,13 @@ body {
 .btn-pdf { background: #e53935; color: white; }
 
 /* Menu modal */
+.menu-section-label {
+  font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--gm);
+  padding: 0 2px 6px; margin: 18px 0 2px;
+  border-bottom: 2px solid var(--gp);
+}
+.menu-section-label:first-child { margin-top: 2px; }
 .menu-item {
   display: flex; align-items: center; gap: 14px;
   padding: 14px 4px; border-bottom: 1px solid var(--g1);
@@ -513,7 +536,7 @@ body {
 @media print {
   .fab, .header-btns, .toolbar, .card-actions, .card-chevron,
   .field-group input, .field-group select, .toast, .modal-overlay,
-  .stats-bar, .meta-bar, .meta-toggle-btn { display: none !important; }
+  .stats-bar, .stats-bar-fade, .meta-bar, .meta-toggle-btn { display: none !important; }
 
   body { background: white; font-size: 11px; }
   .header { position: static; box-shadow: none; }
@@ -639,24 +662,33 @@ body {
   background: white; border-radius: var(--r);
   box-shadow: var(--sh); border-left: 4px solid var(--g3);
   margin-bottom: 10px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.15s, transform 0.15s;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.kard:active { opacity: 0.82; }
-.kard.kard-diff { border-left-color: var(--red); }
-.kard.kard-ok   { border-left-color: var(--gl); }
+.kard:active { transform: scale(0.99); box-shadow: 0 1px 2px rgba(20,40,30,0.06); }
+.kard.kard-diff { border-left-color: var(--red); background: linear-gradient(to right, var(--red-p) 0%, white 90px); }
+.kard.kard-ok   { border-left-color: var(--gl); background: linear-gradient(to right, var(--gp) 0%, white 90px); }
 .kard-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px; }
 .kard-info { flex: 1; min-width: 0; }
 .kard-title { font-size: 15px; font-weight: 700; color: var(--g9); }
 .kard-primac { color: var(--gm); }
-.kard-sub { font-size: 12px; color: var(--g5); margin-top: 3px; }
-.kard-side { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: 10px; }
-.kard-arrow { font-size: 26px; color: var(--g3); font-weight: 300; line-height: 1; }
+.kard-sub { font-size: 12px; color: var(--g5); margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.kard-status {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 2px 7px; border-radius: 20px;
+}
+.kard-status.bad { background: var(--red-p); color: var(--red); }
+.kard-status.ok  { background: var(--gp); color: var(--gm); }
+.kard-side { display: flex; align-items: center; gap: 2px; flex-shrink: 0; margin-left: 10px; }
+.kard-arrow { font-size: 24px; color: var(--g3); font-weight: 300; line-height: 1; transition: transform 0.15s; }
+.kard:active .kard-arrow { transform: translateX(2px); }
 .kard-del-btn {
-  background: none; border: none; color: var(--g3); font-size: 18px;
-  cursor: pointer; padding: 4px 6px; border-radius: 6px;
+  background: none; border: none; color: var(--g3); font-size: 17px;
+  cursor: pointer; padding: 6px 7px; border-radius: 8px;
   -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, background 0.15s;
 }
 .kard-del-btn:active { color: var(--red); background: var(--red-p); }
 .back-btn {
@@ -762,6 +794,7 @@ body {
 </div>
 
 <!-- ══ STATS BAR ══ -->
+<div class="stats-bar-wrap">
 <div class="stats-bar" id="stats-bar">
   <div class="stat-pill">
     <div class="sl">Stabala</div>
@@ -792,6 +825,8 @@ body {
     <div class="sv" id="stat-vd">0.00</div>
   </div>
   <div class="diff-chip ok" id="diff-badge">✓ Bez razlika</div>
+</div>
+<div class="stats-bar-fade" aria-hidden="true"></div>
 </div>
 
 <!-- ══ TOOLBAR ══ -->
@@ -831,6 +866,8 @@ body {
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <h3>Opcije</h3>
+
+    <div class="menu-section-label">Pregled</div>
     <div class="menu-item" onclick="zatvoriModal('modal-meni');otvoriRekap()">
       <div class="menu-icon mi-amber">📊</div>
       <div>
@@ -838,6 +875,8 @@ body {
         <div style="font-size:12px;color:var(--g5);">Pregled po vrsti i sortimentu – ukupni volumeni</div>
       </div>
     </div>
+
+    <div class="menu-section-label">Podaci</div>
     <div class="menu-item" onclick="spremi();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-green">💾</div>
       <div>
@@ -852,6 +891,15 @@ body {
         <div style="font-size:12px;color:var(--g5);">Otvori prethodno sačuvan fajl</div>
       </div>
     </div>
+    <div class="menu-item" onclick="otvoriUvoz();zatvoriModal('modal-meni')">
+      <div class="menu-icon mi-blue">📋</div>
+      <div>
+        <div>Uvezi tekst / CSV</div>
+        <div style="font-size:12px;color:var(--g5);">Zalijepi podatke iz međuspremnika</div>
+      </div>
+    </div>
+
+    <div class="menu-section-label">Izvoz i štampa</div>
     <div class="menu-item" id="mi-csv" onclick="exportCSV();zatvoriModal('modal-meni')">
       <div class="menu-icon mi-amber">📊</div>
       <div>
@@ -887,13 +935,7 @@ body {
         <div style="font-size:12px;color:var(--g5);">Svaki komad zasebno, s velikim fotografijama</div>
       </div>
     </div>
-    <div class="menu-item" onclick="otvoriUvoz();zatvoriModal('modal-meni')">
-      <div class="menu-icon mi-blue">📋</div>
-      <div>
-        <div>Uvezi tekst / CSV</div>
-        <div style="font-size:12px;color:var(--g5);">Zalijepi podatke iz međuspremnika</div>
-      </div>
-    </div>
+
     <div class="menu-item" onclick="zatvoriModal('modal-meni');backToHome()">
       <div class="menu-icon mi-green">🏠</div>
       <div>
@@ -1284,9 +1326,9 @@ function makeCard(r, num) {
         <div class="dl">Zap. Δ m³</div>
         <div class="dv ${dV === null ? 'zero' : (Math.abs(dV) < 0.001 ? 'zero' : (dV > 0 ? 'pos' : 'neg'))}">${dvStr}</div>
       </div>
-      <div class="diff-box">
+      <div class="diff-box diff-box-klasa">
         <div class="dl">Klasa</div>
-        <div class="dv ${dSort ? 'diff-klas' : 'zero'}">${dSort ? r.kSort.substring(0,6)+'→'+r.rSort.substring(0,6) : '—'}</div>
+        ${klasaDiffHTML(dSort, r)}
       </div>
     </div>
   </div>`;
@@ -1443,7 +1485,7 @@ function updateCardDiffs(r) {
     <div class="diff-box"><div class="dl">Prečnik</div><div class="dv ${diffCls(dPrec)}">${formatDiff(dPrec)}</div></div>
     <div class="diff-box"><div class="dl">Dužina</div><div class="dv ${diffCls(dDuz)}">${formatDiff(dDuz)}</div></div>
     <div class="diff-box"><div class="dl">Zap. Δ m³</div><div class="dv ${dV===null?'zero':(Math.abs(dV)<0.001?'zero':(dV>0?'pos':'neg'))}">${dvStr}</div></div>
-    <div class="diff-box"><div class="dl">Klasa</div><div class="dv ${dSort?'diff-klas':'zero'}">${dSort?r.kSort.substring(0,6)+'→'+r.rSort.substring(0,6):'—'}</div></div>`;
+    <div class="diff-box diff-box-klasa"><div class="dl">Klasa</div>${klasaDiffHTML(dSort, r)}</div>`;
 
   // Boja kartice
   const card = document.getElementById('card-' + r.id);
@@ -1569,6 +1611,16 @@ function formatDiff(d) {
 function diffCls(d) {
   if (d === null || Math.abs(d) < 0.001) return 'zero';
   return d > 0 ? 'pos' : 'neg';
+}
+// Prikaz razlike klase u diff-box-u: dvoredno + odsijeca dugačke nazive
+// umjesto nepredvidivog prelamanja teksta usred riječi.
+function klasaDiffHTML(dSort, r) {
+  if (!dSort) return '<div class="dv zero">—</div>';
+  return `<div class="dv diff-klas">
+    <span class="dk-line">${esc(r.kSort)}</span>
+    <span class="dk-arrow">↓</span>
+    <span class="dk-line">${esc(r.rSort)}</span>
+  </div>`;
 }
 function rowHasDiff(r) {
   const dp = calcDiff(r.kPrec, r.rPrec);
@@ -2785,9 +2837,9 @@ function makeKontrolaCard(k) {
   const primac    = (k.meta && k.meta.primka)    ? k.meta.primka    : `(bez ${primacLbl})`;
   const kontrolor = (k.meta && k.meta.kontrolor) ? k.meta.kontrolor : '—';
   const hasDiff   = nDiff > 0;
-  const statusStr = nRows === 0 ? '' :
-    hasDiff ? `<span style="color:var(--red)">${nDiff} razlika</span>` :
-              `<span style="color:var(--gm)">bez razlika</span>`;
+  const statusChip = nRows === 0 ? '' :
+    hasDiff ? `<span class="kard-status bad">⚠ ${nDiff} razlika</span>` :
+              `<span class="kard-status ok">✓ bez razlika</span>`;
   const div = document.createElement('div');
   div.className = 'kard' + (hasDiff ? ' kard-diff' : (nRows > 0 ? ' kard-ok' : ''));
   div.innerHTML = `
@@ -2795,10 +2847,9 @@ function makeKontrolaCard(k) {
       <div class="kard-info">
         <div class="kard-title">${esc(datum)} &nbsp;·&nbsp; <span class="kard-primac">${esc(primac)}</span></div>
         <div class="kard-sub">Kontrolor: ${esc(kontrolor)}</div>
-        <div class="kard-sub">${nRows} sortiment${nRows === 1 ? '' : 'a'}${statusStr ? ' &nbsp;·&nbsp; ' + statusStr : ''}</div>
+        <div class="kard-sub">${nRows} sortiment${nRows === 1 ? '' : 'a'}${statusChip}</div>
       </div>
       <div class="kard-side">
-        <div class="diff-dot ${hasDiff ? 'bad' : (nRows > 0 ? 'ok' : '')}"></div>
         <button class="kard-del-btn" title="Obriši">🗑</button>
         <span class="kard-arrow">›</span>
       </div>
